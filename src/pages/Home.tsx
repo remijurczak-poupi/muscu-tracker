@@ -111,7 +111,7 @@ export default function Home() {
           exercises={exercises}
           excludeIds={exerciseIdsInSession}
           onPick={(id) => setSessionExerciseIds((ids) => [...ids, id])}
-          onCreate={(name) => addExercise(name, null)}
+          onCreate={(name, muscleGroup) => addExercise(name, muscleGroup)}
         />
       </div>
     </div>

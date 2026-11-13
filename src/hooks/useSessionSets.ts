@@ -57,5 +57,10 @@ export function useSessionSets(sessionId: string | null) {
     await refresh()
   }
 
-  return { sets, loading, addSet, removeSet, refresh }
+  const updateSet = async (id: string, params: { weightKg: number; reps: number }) => {
+    await supabase.from('sets').update({ weight_kg: params.weightKg, reps: params.reps }).eq('id', id)
+    await refresh()
+  }
+
+  return { sets, loading, addSet, removeSet, updateSet, refresh }
 }

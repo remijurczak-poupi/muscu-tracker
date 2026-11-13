@@ -179,5 +179,10 @@ export function useSessions(limit = 30) {
     refresh()
   }, [refresh])
 
-  return { sessions, loading, refresh }
+  const removeSession = async (id: string) => {
+    await supabase.from('workout_sessions').delete().eq('id', id)
+    await refresh()
+  }
+
+  return { sessions, loading, removeSession, refresh }
 }
