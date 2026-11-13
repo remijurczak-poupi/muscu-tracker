@@ -34,3 +34,14 @@ export type SetRow = {
   rest_seconds: number | null
   created_at: string
 }
+
+export type ExerciseGymNote = {
+  id: string
+  user_id: string
+  exercise_id: string
+  gym_id: string
+  photo_path: string | null
+  technique_notes: string | null
+  video_url: string | null
+  updated_at: string
+}

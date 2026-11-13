@@ -4,16 +4,18 @@ import { suggestNextWeight } from '../lib/suggestions'
 import { useExerciseHistory } from '../hooks/useData'
 import { useElapsed } from '../hooks/useElapsed'
 import { formatSeconds } from '../lib/time'
+import ExerciseGymCard from './ExerciseGymCard'
 
 type Props = {
   exercise: Exercise
   sessionId: string
+  gymId: string | null
   sets: SetRow[]
   onAddSet: (params: { exerciseId: string; weightKg: number; reps: number; restSeconds: number | null }) => Promise<void>
   onRemoveSet: (id: string) => Promise<void>
 }
 
-export default function ExerciseBlock({ exercise, sessionId, sets, onAddSet, onRemoveSet }: Props) {
+export default function ExerciseBlock({ exercise, sessionId, gymId, sets, onAddSet, onRemoveSet }: Props) {
   const { history } = useExerciseHistory(exercise.id)
   const priorHistory = history.filter((s) => s.session_id !== sessionId)
   const suggestion = suggestNextWeight(exercise, priorHistory)
@@ -38,6 +40,14 @@ export default function ExerciseBlock({ exercise, sessionId, sets, onAddSet, onR
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
       <h3 className="mb-2 font-semibold text-white">{exercise.name}</h3>
+
+      {gymId ? (
+        <ExerciseGymCard exerciseId={exercise.id} gymId={gymId} />
+      ) : (
+        <p className="mb-3 text-xs text-slate-600">
+          Choisis une salle pour activer la photo et les notes technique.
+        </p>
+      )}
 
       {suggestion && sets.length === 0 && (
         <p className="mb-3 rounded-lg bg-indigo-500/10 px-3 py-2 text-sm text-indigo-300">

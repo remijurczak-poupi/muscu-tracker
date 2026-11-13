@@ -86,6 +86,7 @@ export default function Home() {
               key={exId}
               exercise={exercise}
               sessionId={session.id}
+              gymId={session.gym_id}
               sets={sets.filter((s) => s.exercise_id === exId)}
               onAddSet={addSet}
               onRemoveSet={removeSet}
