@@ -1,0 +1,36 @@
+export type Gym = {
+  id: string
+  user_id: string
+  name: string
+  created_at: string
+}
+
+export type Exercise = {
+  id: string
+  user_id: string
+  name: string
+  muscle_group: string | null
+  weight_increment: number
+  created_at: string
+}
+
+export type WorkoutSession = {
+  id: string
+  user_id: string
+  gym_id: string | null
+  started_at: string
+  ended_at: string | null
+  notes: string | null
+}
+
+export type SetRow = {
+  id: string
+  user_id: string
+  session_id: string
+  exercise_id: string
+  set_index: number
+  weight_kg: number
+  reps: number
+  rest_seconds: number | null
+  created_at: string
+}
