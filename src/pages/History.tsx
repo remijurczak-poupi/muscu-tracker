@@ -32,6 +32,7 @@ export default function History() {
                   {formatDateTime(s.started_at)}
                   {gym ? ` · ${gym.name}` : ''}
                   {!s.ended_at && <span className="ml-2 text-emerald-400">(en cours)</span>}
+                  {s.notes && <span className="ml-2 text-xs italic text-slate-500">{s.notes}</span>}
                 </span>
                 <span className="text-slate-500">{isOpen ? '▲' : '▼'}</span>
               </button>

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Exercise, SetRow } from '../lib/types'
 import { suggestNextWeight } from '../lib/suggestions'
 import { useExerciseHistory } from '../hooks/useData'
 import { useElapsed } from '../hooks/useElapsed'
 import { formatSeconds } from '../lib/time'
 import ExerciseGymCard from './ExerciseGymCard'
+import RestTimer from './RestTimer'
 
 type Props = {
   exercise: Exercise
@@ -23,9 +24,19 @@ export default function ExerciseBlock({ exercise, sessionId, gymId, sets, onAddS
   const lastSetAt = sets.length > 0 ? new Date(sets[sets.length - 1].created_at).getTime() : null
   const elapsed = useElapsed(lastSetAt)
 
-  const [weight, setWeight] = useState(() => suggestion?.weight?.toString() ?? '')
-  const [reps, setReps] = useState(() => suggestion?.reps?.toString() ?? '')
+  const [weight, setWeight] = useState('')
+  const [reps, setReps] = useState('')
   const [restOverride, setRestOverride] = useState<string>('')
+
+  // Pré-remplit avec la suggestion dès qu'elle arrive (l'historique charge après le 1er rendu),
+  // tant que l'utilisateur n'a pas encore saisi de série ce tour-ci.
+  useEffect(() => {
+    if (sets.length === 0 && suggestion) {
+      setWeight(suggestion.weight.toString())
+      setReps(suggestion.reps.toString())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestion?.weight, suggestion?.reps])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -81,9 +92,7 @@ export default function ExerciseBlock({ exercise, sessionId, gymId, sets, onAddS
         </ul>
       )}
 
-      {sets.length > 0 && (
-        <p className="mb-2 text-xs text-slate-500">Repos en cours : {formatSeconds(elapsed)}</p>
-      )}
+      {sets.length > 0 && <RestTimer elapsed={elapsed} />}
 
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col text-xs text-slate-400">

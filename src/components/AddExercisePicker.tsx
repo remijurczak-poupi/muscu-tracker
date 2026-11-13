@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Exercise } from '../lib/types'
+import { groupByMuscle } from '../lib/grouping'
 
 type Props = {
   exercises: Exercise[]
@@ -15,6 +16,7 @@ export default function AddExercisePicker({ exercises, excludeIds, onPick, onCre
   const available = exercises.filter(
     (e) => !excludeIds.includes(e.id) && e.name.toLowerCase().includes(query.toLowerCase()),
   )
+  const groups = groupByMuscle(available)
   const exactMatch = exercises.some((e) => e.name.toLowerCase() === query.trim().toLowerCase())
 
   if (!open) {
@@ -39,19 +41,26 @@ export default function AddExercisePicker({ exercises, excludeIds, onPick, onCre
         className="mb-2 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white placeholder-slate-500"
       />
       <div className="flex max-h-48 flex-col gap-1 overflow-y-auto">
-        {available.map((e) => (
-          <button
-            key={e.id}
-            type="button"
-            onClick={() => {
-              onPick(e.id)
-              setOpen(false)
-              setQuery('')
-            }}
-            className="rounded-md px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800"
-          >
-            {e.name}
-          </button>
+        {groups.map(([group, list]) => (
+          <div key={group}>
+            <p className="mt-1 px-3 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+              {group}
+            </p>
+            {list.map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => {
+                  onPick(e.id)
+                  setOpen(false)
+                  setQuery('')
+                }}
+                className="w-full rounded-md px-3 py-2 text-left text-sm text-slate-200 hover:bg-slate-800"
+              >
+                {e.name}
+              </button>
+            ))}
+          </div>
         ))}
         {query.trim() && !exactMatch && (
           <button

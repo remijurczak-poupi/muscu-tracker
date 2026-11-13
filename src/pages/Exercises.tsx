@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { useExercises, useExerciseHistory } from '../hooks/useData'
 import { suggestNextWeight } from '../lib/suggestions'
 import { formatDate } from '../lib/time'
+import { groupByMuscle } from '../lib/grouping'
 
 export default function Exercises() {
   const { exercises, loading } = useExercises()
@@ -11,28 +12,37 @@ export default function Exercises() {
   if (loading) return <div className="p-6 text-center text-slate-500">Chargement…</div>
 
   const exercise = exercises.find((e) => e.id === selected)
+  const groups = groupByMuscle(exercises)
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-6">
       <h1 className="mb-4 text-lg font-bold text-white">Exercices</h1>
 
       {!exercise && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-4">
           {exercises.length === 0 && (
             <p className="text-sm text-slate-500">
               Aucun exercice pour l'instant — ajoute-en un depuis l'onglet Séance.
             </p>
           )}
-          {exercises.map((e) => (
-            <button
-              key={e.id}
-              type="button"
-              onClick={() => setSelected(e.id)}
-              className="rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-200"
-            >
-              {e.name}
-              {e.muscle_group && <span className="ml-2 text-xs text-slate-500">{e.muscle_group}</span>}
-            </button>
+          {groups.map(([group, list]) => (
+            <div key={group}>
+              <h2 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {group}
+              </h2>
+              <div className="flex flex-col gap-1.5">
+                {list.map((e) => (
+                  <button
+                    key={e.id}
+                    type="button"
+                    onClick={() => setSelected(e.id)}
+                    className="rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 text-left text-sm text-slate-200"
+                  >
+                    {e.name}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

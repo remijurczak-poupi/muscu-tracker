@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useActiveSession } from '../hooks/useActiveSession'
 import { useSessionSets } from '../hooks/useSessionSets'
 import { useExercises, useGyms } from '../hooks/useData'
@@ -13,6 +13,8 @@ export default function Home() {
   const { sets, addSet, removeSet } = useSessionSets(session?.id ?? null)
   const [selectedGym, setSelectedGym] = useState<string>('')
   const [sessionExerciseIds, setSessionExerciseIds] = useState<string[]>([])
+  const [starting, setStarting] = useState(false)
+  const startingRef = useRef(false)
 
   const exerciseIdsInSession = useMemo(() => {
     const fromSets = sets.map((s) => s.exercise_id)
@@ -44,10 +46,21 @@ export default function Home() {
           <GymQuickAdd onAdd={addGym} />
           <button
             type="button"
-            onClick={() => startSession(selectedGym || null)}
-            className="mt-4 w-full rounded-lg bg-indigo-600 py-3 font-semibold text-white"
+            disabled={starting}
+            onClick={async () => {
+              if (startingRef.current) return
+              startingRef.current = true
+              setStarting(true)
+              try {
+                await startSession(selectedGym || null)
+              } finally {
+                startingRef.current = false
+                setStarting(false)
+              }
+            }}
+            className="mt-4 w-full rounded-lg bg-indigo-600 py-3 font-semibold text-white disabled:opacity-50"
           >
-            Démarrer la séance
+            {starting ? 'Démarrage…' : 'Démarrer la séance'}
           </button>
         </div>
       </div>
