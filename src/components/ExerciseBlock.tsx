@@ -2,27 +2,31 @@ import { useEffect, useState } from 'react'
 import type { Exercise, SetRow } from '../lib/types'
 import { suggestNextWeight } from '../lib/suggestions'
 import { useExerciseHistory } from '../hooks/useData'
-import { useElapsed } from '../hooks/useElapsed'
 import { formatSeconds } from '../lib/time'
 import ExerciseGymCard from './ExerciseGymCard'
-import RestTimer from './RestTimer'
 
 type Props = {
   exercise: Exercise
   sessionId: string
   gymId: string | null
   sets: SetRow[]
+  sessionRestElapsed: number | null
   onAddSet: (params: { exerciseId: string; weightKg: number; reps: number; restSeconds: number | null }) => Promise<void>
   onRemoveSet: (id: string) => Promise<void>
 }
 
-export default function ExerciseBlock({ exercise, sessionId, gymId, sets, onAddSet, onRemoveSet }: Props) {
+export default function ExerciseBlock({
+  exercise,
+  sessionId,
+  gymId,
+  sets,
+  sessionRestElapsed,
+  onAddSet,
+  onRemoveSet,
+}: Props) {
   const { history } = useExerciseHistory(exercise.id)
   const priorHistory = history.filter((s) => s.session_id !== sessionId)
   const suggestion = suggestNextWeight(exercise, priorHistory)
-
-  const lastSetAt = sets.length > 0 ? new Date(sets[sets.length - 1].created_at).getTime() : null
-  const elapsed = useElapsed(lastSetAt)
 
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
@@ -43,7 +47,7 @@ export default function ExerciseBlock({ exercise, sessionId, gymId, sets, onAddS
     const w = parseFloat(weight)
     const r = parseInt(reps, 10)
     if (Number.isNaN(w) || Number.isNaN(r)) return
-    const rest = restOverride ? parseInt(restOverride, 10) : sets.length > 0 ? elapsed : null
+    const rest = restOverride ? parseInt(restOverride, 10) : sessionRestElapsed
     await onAddSet({ exerciseId: exercise.id, weightKg: w, reps: r, restSeconds: rest })
     setRestOverride('')
   }
@@ -92,8 +96,6 @@ export default function ExerciseBlock({ exercise, sessionId, gymId, sets, onAddS
         </ul>
       )}
 
-      {sets.length > 0 && <RestTimer elapsed={elapsed} />}
-
       <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col text-xs text-slate-400">
           Poids (kg)
@@ -123,7 +125,7 @@ export default function ExerciseBlock({ exercise, sessionId, gymId, sets, onAddS
           <input
             type="number"
             inputMode="numeric"
-            placeholder={sets.length > 0 ? String(elapsed) : '—'}
+            placeholder={sessionRestElapsed !== null ? String(sessionRestElapsed) : '—'}
             value={restOverride}
             onChange={(e) => setRestOverride(e.target.value)}
             className="mt-1 w-20 rounded-md border border-slate-700 bg-slate-950 px-2 py-2 text-white placeholder-slate-600"

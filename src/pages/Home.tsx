@@ -2,9 +2,11 @@ import { useMemo, useRef, useState } from 'react'
 import { useActiveSession } from '../hooks/useActiveSession'
 import { useSessionSets } from '../hooks/useSessionSets'
 import { useExercises, useGyms } from '../hooks/useData'
+import { useElapsed } from '../hooks/useElapsed'
 import ExerciseBlock from '../components/ExerciseBlock'
 import AddExercisePicker from '../components/AddExercisePicker'
-import { formatDateTime } from '../lib/time'
+import RestTimer from '../components/RestTimer'
+import { formatDuration } from '../lib/time'
 
 export default function Home() {
   const { session, loading: sessionLoading, startSession, endSession } = useActiveSession()
@@ -20,6 +22,13 @@ export default function Home() {
     const fromSets = sets.map((s) => s.exercise_id)
     return Array.from(new Set([...fromSets, ...sessionExerciseIds]))
   }, [sets, sessionExerciseIds])
+
+  const lastSetAt = useMemo(() => {
+    if (sets.length === 0) return null
+    return Math.max(...sets.map((s) => new Date(s.created_at).getTime()))
+  }, [sets])
+  const restElapsed = useElapsed(lastSetAt)
+  const totalElapsed = useElapsed(session ? new Date(session.started_at).getTime() : null)
 
   if (sessionLoading) {
     return <div className="p-6 text-center text-slate-500">Chargement…</div>
@@ -71,23 +80,27 @@ export default function Home() {
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-6">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-bold text-white">Séance en cours</h1>
-          <p className="text-xs text-slate-500">
-            {gym ? `${gym.name} · ` : ''}
-            depuis {formatDateTime(session.started_at)}
-          </p>
+      <div className="sticky top-0 z-10 -mx-4 bg-slate-950/95 px-4 pb-3 pt-6 backdrop-blur">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold text-white">Séance en cours</h1>
+            <p className="text-xs text-slate-500">
+              {gym ? `${gym.name} · ` : ''}
+              Durée totale : <span className="tabular-nums">{formatDuration(totalElapsed)}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm('Terminer la séance ?')) endSession()
+            }}
+            className="rounded-md bg-emerald-600/90 px-3 py-2 text-sm font-semibold text-white"
+          >
+            Terminer
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm('Terminer la séance ?')) endSession()
-          }}
-          className="rounded-md bg-emerald-600/90 px-3 py-2 text-sm font-semibold text-white"
-        >
-          Terminer
-        </button>
+
+        {lastSetAt !== null && <RestTimer elapsed={restElapsed} />}
       </div>
 
       <div className="flex flex-col gap-4">
@@ -101,6 +114,7 @@ export default function Home() {
               sessionId={session.id}
               gymId={session.gym_id}
               sets={sets.filter((s) => s.exercise_id === exId)}
+              sessionRestElapsed={lastSetAt !== null ? restElapsed : null}
               onAddSet={addSet}
               onRemoveSet={removeSet}
             />
