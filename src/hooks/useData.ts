@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Exercise, Gym, SetRow, WorkoutSession } from '../lib/types'
+import type { Activity, Exercise, Gym, SetRow, WorkoutSession } from '../lib/types'
 
 export function useGyms() {
   const [gyms, setGyms] = useState<Gym[]>([])
@@ -105,6 +105,55 @@ export function useExerciseHistory(exerciseId: string | null) {
   }, [refresh])
 
   return { history, loading, refresh }
+}
+
+export function useActivities(limit = 30) {
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const refresh = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('activities')
+        .select('*')
+        .order('started_at', { ascending: false })
+        .limit(limit)
+      if (!error && data) setActivities(data as Activity[])
+    } catch {
+      // réseau indisponible : on garde les données déjà en mémoire
+    } finally {
+      setLoading(false)
+    }
+  }, [limit])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const addActivity = async (params: {
+    sport: string
+    startedAt: string
+    durationMinutes: number
+    distanceKm: number | null
+  }) => {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) return
+    await supabase.from('activities').insert({
+      user_id: userData.user.id,
+      sport: params.sport,
+      started_at: params.startedAt,
+      duration_minutes: params.durationMinutes,
+      distance_km: params.distanceKm,
+    })
+    await refresh()
+  }
+
+  const removeActivity = async (id: string) => {
+    await supabase.from('activities').delete().eq('id', id)
+    await refresh()
+  }
+
+  return { activities, loading, addActivity, removeActivity, refresh }
 }
 
 export function useSessions(limit = 30) {

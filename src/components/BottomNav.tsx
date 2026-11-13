@@ -4,6 +4,7 @@ const tabs = [
   { to: '/', label: 'Séance', icon: '🏋️' },
   { to: '/history', label: 'Historique', icon: '📅' },
   { to: '/exercises', label: 'Exercices', icon: '📈' },
+  { to: '/activities', label: 'Sport', icon: '🏃' },
   { to: '/settings', label: 'Réglages', icon: '⚙️' },
 ]
 
