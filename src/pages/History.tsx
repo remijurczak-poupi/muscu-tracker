@@ -1,67 +1,118 @@
 import { useState } from 'react'
-import { useSessions, useExercises, useGyms } from '../hooks/useData'
+import { useSessions, useExercises, useGyms, useActivities } from '../hooks/useData'
 import { useSessionSets } from '../hooks/useSessionSets'
-import { formatDateTime, formatSeconds } from '../lib/time'
-import type { SetRow } from '../lib/types'
+import { formatDateTime, formatSeconds, formatMinutes } from '../lib/time'
+import { sportIcon, sportLabel } from '../lib/sports'
+import type { Activity, SetRow, WorkoutSession } from '../lib/types'
+
+type Item =
+  | { kind: 'session'; at: number; session: WorkoutSession }
+  | { kind: 'activity'; at: number; activity: Activity }
 
 export default function History() {
-  const { sessions, loading, removeSession } = useSessions()
+  const { sessions, loading: sessionsLoading, removeSession } = useSessions()
+  const { activities, loading: activitiesLoading, removeActivity } = useActivities()
   const { gyms } = useGyms()
   const { exercises } = useExercises()
   const [openId, setOpenId] = useState<string | null>(null)
 
-  if (loading) return <div className="p-6 text-center text-slate-500">Chargement…</div>
+  if (sessionsLoading || activitiesLoading) {
+    return <div className="p-6 text-center text-slate-500">Chargement…</div>
+  }
+
+  const items: Item[] = [
+    ...sessions.map((s) => ({ kind: 'session' as const, at: new Date(s.started_at).getTime(), session: s })),
+    ...activities.map((a) => ({ kind: 'activity' as const, at: new Date(a.started_at).getTime(), activity: a })),
+  ].sort((a, b) => b.at - a.at)
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-6">
       <h1 className="mb-4 text-lg font-bold text-white">Historique</h1>
-      {sessions.length === 0 && (
+      {items.length === 0 && (
         <p className="text-sm text-slate-500">Aucune séance enregistrée pour l'instant.</p>
       )}
       <div className="flex flex-col gap-2">
-        {sessions.map((s) => {
-          const gym = gyms.find((g) => g.id === s.gym_id)
-          const isOpen = openId === s.id
-          return (
-            <div key={s.id} className="rounded-xl border border-slate-800 bg-slate-900/60">
-              <div className="flex w-full items-center justify-between px-4 py-3">
-                <button
-                  type="button"
-                  onClick={() => setOpenId(isOpen ? null : s.id)}
-                  className="flex-1 text-left"
-                >
-                  <span className="text-sm text-slate-200">
-                    {formatDateTime(s.started_at)}
-                    {gym ? ` · ${gym.name}` : ''}
-                    {!s.ended_at && <span className="ml-2 text-emerald-400">(en cours)</span>}
-                    {s.notes && <span className="ml-2 text-xs italic text-slate-500">{s.notes}</span>}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm('Supprimer définitivement cette séance et toutes ses séries ?')) {
-                      removeSession(s.id)
-                    }
-                  }}
-                  className="px-2 text-slate-600 hover:text-red-400"
-                  aria-label="Supprimer la séance"
-                >
-                  🗑️
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpenId(isOpen ? null : s.id)}
-                  className="px-1 text-slate-500"
-                >
-                  {isOpen ? '▲' : '▼'}
-                </button>
-              </div>
-              {isOpen && <SessionDetail sessionId={s.id} exercises={exercises} />}
-            </div>
-          )
-        })}
+        {items.map((item) =>
+          item.kind === 'session' ? (
+            <SessionCard
+              key={item.session.id}
+              s={item.session}
+              gymName={gyms.find((g) => g.id === item.session.gym_id)?.name}
+              exercises={exercises}
+              isOpen={openId === item.session.id}
+              onToggle={() => setOpenId(openId === item.session.id ? null : item.session.id)}
+              onRemove={() => {
+                if (confirm('Supprimer définitivement cette séance et toutes ses séries ?')) {
+                  removeSession(item.session.id)
+                }
+              }}
+            />
+          ) : (
+            <ActivityCard
+              key={item.activity.id}
+              a={item.activity}
+              onRemove={() => {
+                if (confirm('Supprimer cette activité ?')) removeActivity(item.activity.id)
+              }}
+            />
+          ),
+        )}
       </div>
+    </div>
+  )
+}
+
+function ActivityCard({ a, onRemove }: { a: Activity; onRemove: () => void }) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+      <div className="text-sm text-slate-200">
+        <span className="mr-1">{sportIcon(a.sport)}</span>
+        <span className="font-semibold">{sportLabel(a.sport)}</span>
+        <span className="text-slate-500"> · {formatMinutes(a.duration_minutes)}</span>
+        {a.distance_km !== null && <span className="text-slate-500"> · {a.distance_km} km</span>}
+        <p className="text-xs text-slate-600">{formatDateTime(a.started_at)}</p>
+      </div>
+      <button type="button" onClick={onRemove} className="px-2 text-slate-600 hover:text-red-400" aria-label="Supprimer">
+        🗑️
+      </button>
+    </div>
+  )
+}
+
+function SessionCard({
+  s,
+  gymName,
+  exercises,
+  isOpen,
+  onToggle,
+  onRemove,
+}: {
+  s: WorkoutSession
+  gymName: string | undefined
+  exercises: { id: string; name: string }[]
+  isOpen: boolean
+  onToggle: () => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60">
+      <div className="flex w-full items-center justify-between px-4 py-3">
+        <button type="button" onClick={onToggle} className="flex-1 text-left">
+          <span className="text-sm text-slate-200">
+            🏋️ {formatDateTime(s.started_at)}
+            {gymName ? ` · ${gymName}` : ''}
+            {!s.ended_at && <span className="ml-2 text-emerald-400">(en cours)</span>}
+            {s.notes && <span className="ml-2 text-xs italic text-slate-500">{s.notes}</span>}
+          </span>
+        </button>
+        <button type="button" onClick={onRemove} className="px-2 text-slate-600 hover:text-red-400" aria-label="Supprimer la séance">
+          🗑️
+        </button>
+        <button type="button" onClick={onToggle} className="px-1 text-slate-500">
+          {isOpen ? '▲' : '▼'}
+        </button>
+      </div>
+      {isOpen && <SessionDetail sessionId={s.id} exercises={exercises} />}
     </div>
   )
 }

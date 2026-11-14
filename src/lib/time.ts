@@ -13,6 +13,15 @@ export function formatDuration(totalSeconds: number): string {
   return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
+/** Formate une durée en minutes en "Xh" / "Xh YY" / "YY min" (séances de sport). */
+export function formatMinutes(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60)
+  const m = totalMinutes % 60
+  if (h === 0) return `${m} min`
+  if (m === 0) return `${h} h`
+  return `${h} h ${m.toString().padStart(2, '0')}`
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', {
     weekday: 'short',

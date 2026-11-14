@@ -5,7 +5,6 @@ import Login from './pages/Login'
 import Home from './pages/Home'
 import History from './pages/History'
 import Exercises from './pages/Exercises'
-import Activities from './pages/Activities'
 import Settings from './pages/Settings'
 
 function AppShell() {
@@ -23,7 +22,6 @@ function AppShell() {
         <Route path="/" element={<Home />} />
         <Route path="/history" element={<History />} />
         <Route path="/exercises" element={<Exercises />} />
-        <Route path="/activities" element={<Activities />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
       <BottomNav />
