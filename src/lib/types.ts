@@ -45,6 +45,22 @@ export type Activity = {
   notes: string | null
 }
 
+export type SessionTemplate = {
+  id: string
+  user_id: string
+  name: string
+  exercise_ids: string[]
+  created_at: string
+}
+
+export type BodyMetric = {
+  id: string
+  user_id: string
+  date: string
+  weight_kg: number
+  created_at: string
+}
+
 export type ExerciseGymNote = {
   id: string
   user_id: string

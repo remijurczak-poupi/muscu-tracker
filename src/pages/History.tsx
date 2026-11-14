@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSessions, useExercises, useGyms, useActivities } from '../hooks/useData'
+import { useSessions, useExercises, useGyms, useActivities, useWeekStats } from '../hooks/useData'
 import { useSessionSets } from '../hooks/useSessionSets'
 import { formatDateTime, formatSeconds, formatMinutes } from '../lib/time'
 import { sportIcon, sportLabel } from '../lib/sports'
@@ -28,6 +28,7 @@ export default function History() {
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-6">
       <h1 className="mb-4 text-lg font-bold text-white">Historique</h1>
+      <WeekSummary />
       {items.length === 0 && (
         <p className="text-sm text-slate-500">Aucune séance enregistrée pour l'instant.</p>
       )}
@@ -58,6 +59,22 @@ export default function History() {
           ),
         )}
       </div>
+    </div>
+  )
+}
+
+function WeekSummary() {
+  const { volume, sessionCount, sportMinutes, loading } = useWeekStats()
+
+  if (loading || (sessionCount === 0 && sportMinutes === 0)) return null
+
+  return (
+    <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+      <p className="mb-1 text-xs uppercase tracking-wide text-slate-500">Cette semaine</p>
+      <p className="text-sm text-slate-200">
+        🏋️ {sessionCount} séance{sessionCount > 1 ? 's' : ''} · {Math.round(volume).toLocaleString('fr-FR')} kg soulevés
+        {sportMinutes > 0 && <> · 🏃 {formatMinutes(sportMinutes)} de sport</>}
+      </p>
     </div>
   )
 }

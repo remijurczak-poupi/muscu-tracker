@@ -3,6 +3,8 @@ import type { Exercise, SetRow } from '../lib/types'
 import { suggestNextWeight } from '../lib/suggestions'
 import { useExerciseHistory } from '../hooks/useData'
 import { formatSeconds } from '../lib/time'
+import { formatPlates } from '../lib/plates'
+import { warmupSets } from '../lib/warmup'
 import ExerciseGymCard from './ExerciseGymCard'
 
 type Props = {
@@ -31,6 +33,8 @@ export default function ExerciseBlock({
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
   const [restOverride, setRestOverride] = useState<string>('')
+  const [showTools, setShowTools] = useState(false)
+  const [prMessage, setPrMessage] = useState<string | null>(null)
 
   // Pré-remplit avec la suggestion dès qu'elle arrive (l'historique charge après le 1er rendu),
   // tant que l'utilisateur n'a pas encore saisi de série ce tour-ci.
@@ -48,9 +52,23 @@ export default function ExerciseBlock({
     const r = parseInt(reps, 10)
     if (Number.isNaN(w) || Number.isNaN(r)) return
     const rest = restOverride ? parseInt(restOverride, 10) : sessionRestElapsed
+
+    const maxWeightEver = priorHistory.length ? Math.max(...priorHistory.map((s) => s.weight_kg)) : 0
+    const repsAtThisWeight = priorHistory.filter((s) => s.weight_kg === w).map((s) => s.reps)
+    const maxRepsAtThisWeight = repsAtThisWeight.length ? Math.max(...repsAtThisWeight) : 0
+    const isRecord = w > maxWeightEver || (w === maxWeightEver && r > maxRepsAtThisWeight) || (w < maxWeightEver && repsAtThisWeight.length > 0 && r > maxRepsAtThisWeight)
+
     await onAddSet({ exerciseId: exercise.id, weightKg: w, reps: r, restSeconds: rest })
     setRestOverride('')
+    if (isRecord) {
+      setPrMessage(w > maxWeightEver ? `🎉 Nouveau record de poids : ${w} kg !` : `🎉 Nouveau record de reps à ${w} kg : ${r} !`)
+      setTimeout(() => setPrMessage(null), 4000)
+    }
   }
+
+  const weightNum = parseFloat(weight)
+  const plateText = !Number.isNaN(weightNum) ? formatPlates(weightNum) : null
+  const warmup = !Number.isNaN(weightNum) ? warmupSets(weightNum, exercise.weight_increment || 2.5) : []
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
@@ -67,6 +85,12 @@ export default function ExerciseBlock({
       {suggestion && sets.length === 0 && (
         <p className="mb-3 rounded-lg bg-indigo-500/10 px-3 py-2 text-sm text-indigo-300">
           💡 {suggestion.message}
+        </p>
+      )}
+
+      {prMessage && (
+        <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300">
+          {prMessage}
         </p>
       )}
 
@@ -137,7 +161,29 @@ export default function ExerciseBlock({
         >
           Ajouter
         </button>
+
+        {(plateText || warmup.length > 0) && (
+          <button
+            type="button"
+            onClick={() => setShowTools((v) => !v)}
+            className="rounded-md bg-slate-800 px-3 py-2 text-sm text-slate-300"
+            aria-label="Plaques et échauffement"
+          >
+            🔧
+          </button>
+        )}
       </form>
+
+      {showTools && (plateText || warmup.length > 0) && (
+        <div className="mt-2 rounded-lg bg-slate-950/60 px-3 py-2 text-xs text-slate-400">
+          {plateText && <p>🔩 {plateText}</p>}
+          {warmup.length > 0 && (
+            <p className="mt-1">
+              🔥 Échauffement : {warmup.map((s) => `${s.weight} kg × ${s.reps}`).join(' · ')}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

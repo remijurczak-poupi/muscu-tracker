@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useActiveSession } from '../hooks/useActiveSession'
 import { useSessionSets } from '../hooks/useSessionSets'
-import { useExercises, useGyms, useActivities } from '../hooks/useData'
+import { useExercises, useGyms, useActivities, useTemplates } from '../hooks/useData'
 import { useElapsed } from '../hooks/useElapsed'
 import ExerciseBlock from '../components/ExerciseBlock'
 import AddExercisePicker from '../components/AddExercisePicker'
@@ -20,6 +20,7 @@ export default function Home() {
   const { session, loading: sessionLoading, startSession, endSession } = useActiveSession()
   const { gyms, addGym } = useGyms()
   const { exercises, addExercise } = useExercises()
+  const { templates, addTemplate } = useTemplates()
   const { sets, addSet, removeSet } = useSessionSets(session?.id ?? null)
   const [selectedGym, setSelectedGym] = useState<string>('')
   const [sessionExerciseIds, setSessionExerciseIds] = useState<string[]>([])
@@ -91,6 +92,36 @@ export default function Home() {
             >
               {starting ? 'Démarrage…' : 'Démarrer la séance'}
             </button>
+
+            {templates.length > 0 && (
+              <div className="mt-5">
+                <p className="mb-1.5 text-xs text-slate-400">Ou depuis un template</p>
+                <div className="flex flex-col gap-1.5">
+                  {templates.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      disabled={starting}
+                      onClick={async () => {
+                        if (startingRef.current) return
+                        startingRef.current = true
+                        setStarting(true)
+                        try {
+                          await startSession(selectedGym || null)
+                          setSessionExerciseIds(t.exercise_ids)
+                        } finally {
+                          startingRef.current = false
+                          setStarting(false)
+                        }
+                      }}
+                      className="w-full rounded-md border border-slate-700 bg-slate-900/60 px-3 py-2 text-left text-sm text-slate-200 disabled:opacity-50"
+                    >
+                      {t.name} <span className="text-xs text-slate-500">({t.exercise_ids.length} exos)</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -103,6 +134,18 @@ export default function Home() {
                   {gym ? `${gym.name} · ` : ''}
                   Durée totale : <span className="tabular-nums">{formatDuration(totalElapsed)}</span>
                 </p>
+                {exerciseIdsInSession.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const name = window.prompt('Nom du template ?')
+                      if (name && name.trim()) await addTemplate(name.trim(), exerciseIdsInSession)
+                    }}
+                    className="mt-0.5 text-xs text-indigo-400 underline"
+                  >
+                    💾 Enregistrer comme template
+                  </button>
+                )}
               </div>
               <button
                 type="button"

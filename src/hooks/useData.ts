@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Activity, Exercise, Gym, SetRow, WorkoutSession } from '../lib/types'
+import type { Activity, BodyMetric, Exercise, Gym, SessionTemplate, SetRow, WorkoutSession } from '../lib/types'
 
 export function useGyms() {
   const [gyms, setGyms] = useState<Gym[]>([])
@@ -185,4 +185,122 @@ export function useSessions(limit = 30) {
   }
 
   return { sessions, loading, removeSession, refresh }
+}
+
+export function useTemplates() {
+  const [templates, setTemplates] = useState<SessionTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const refresh = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('session_templates')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (!error && data) setTemplates(data as SessionTemplate[])
+    } catch {
+      // réseau indisponible : on garde les données déjà en mémoire
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const addTemplate = async (name: string, exerciseIds: string[]) => {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) return
+    await supabase
+      .from('session_templates')
+      .insert({ name, exercise_ids: exerciseIds, user_id: userData.user.id })
+    await refresh()
+  }
+
+  const removeTemplate = async (id: string) => {
+    await supabase.from('session_templates').delete().eq('id', id)
+    await refresh()
+  }
+
+  return { templates, loading, addTemplate, removeTemplate, refresh }
+}
+
+export function useBodyMetrics() {
+  const [metrics, setMetrics] = useState<BodyMetric[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const refresh = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('body_metrics')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(60)
+      if (!error && data) setMetrics(data as BodyMetric[])
+    } catch {
+      // réseau indisponible : on garde les données déjà en mémoire
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const addMetric = async (date: string, weightKg: number) => {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) return
+    await supabase.from('body_metrics').insert({ date, weight_kg: weightKg, user_id: userData.user.id })
+    await refresh()
+  }
+
+  const removeMetric = async (id: string) => {
+    await supabase.from('body_metrics').delete().eq('id', id)
+    await refresh()
+  }
+
+  return { metrics, loading, addMetric, removeMetric, refresh }
+}
+
+export function useWeekStats() {
+  const [volume, setVolume] = useState(0)
+  const [sessionCount, setSessionCount] = useState(0)
+  const [sportMinutes, setSportMinutes] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const now = new Date()
+    const dayIndex = (now.getDay() + 6) % 7 // lundi = 0
+    const monday = new Date(now)
+    monday.setHours(0, 0, 0, 0)
+    monday.setDate(now.getDate() - dayIndex)
+    const since = monday.toISOString()
+
+    const run = async () => {
+      try {
+        const [setsRes, activitiesRes] = await Promise.all([
+          supabase.from('sets').select('session_id, weight_kg, reps').gte('created_at', since),
+          supabase.from('activities').select('duration_minutes').gte('started_at', since),
+        ])
+        if (setsRes.data) {
+          const rows = setsRes.data as { session_id: string; weight_kg: number; reps: number }[]
+          setVolume(rows.reduce((sum, s) => sum + s.weight_kg * s.reps, 0))
+          setSessionCount(new Set(rows.map((s) => s.session_id)).size)
+        }
+        if (activitiesRes.data) {
+          const rows = activitiesRes.data as { duration_minutes: number }[]
+          setSportMinutes(rows.reduce((sum, a) => sum + a.duration_minutes, 0))
+        }
+      } catch {
+        // réseau indisponible
+      } finally {
+        setLoading(false)
+      }
+    }
+    run()
+  }, [])
+
+  return { volume, sessionCount, sportMinutes, loading }
 }
