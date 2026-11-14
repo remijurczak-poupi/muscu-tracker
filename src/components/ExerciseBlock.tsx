@@ -26,7 +26,7 @@ export default function ExerciseBlock({
   onAddSet,
   onRemoveSet,
 }: Props) {
-  const { history } = useExerciseHistory(exercise.id)
+  const { history } = useExerciseHistory(exercise.id, gymId)
   const priorHistory = history.filter((s) => s.session_id !== sessionId)
   const suggestion = suggestNextWeight(exercise, priorHistory)
 

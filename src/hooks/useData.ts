@@ -55,7 +55,7 @@ export function useExercises() {
     refresh()
   }, [refresh])
 
-  const addExercise = async (name: string, muscleGroup: string | null) => {
+  const addExercise = async (name: string, muscleGroup: string | null, gymId?: string | null) => {
     const { data: userData } = await supabase.auth.getUser()
     if (!userData.user) return null
     const { data } = await supabase
@@ -63,8 +63,14 @@ export function useExercises() {
       .insert({ name, muscle_group: muscleGroup, user_id: userData.user.id })
       .select()
       .single()
+    const exercise = (data as Exercise) ?? null
+    if (exercise && gymId) {
+      await supabase
+        .from('exercise_gyms')
+        .insert({ exercise_id: exercise.id, gym_id: gymId, user_id: userData.user.id })
+    }
     await refresh()
-    return (data as Exercise) ?? null
+    return exercise
   }
 
   const removeExercise = async (id: string) => {
@@ -75,7 +81,8 @@ export function useExercises() {
   return { exercises, loading, addExercise, removeExercise, refresh }
 }
 
-export function useExerciseHistory(exerciseId: string | null) {
+/** gymId filtre l'historique à une seule salle (poids/suggestions dépendent de l'équipement de la salle). */
+export function useExerciseHistory(exerciseId: string | null, gymId?: string | null) {
   const [history, setHistory] = useState<SetRow[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -87,24 +94,68 @@ export function useExerciseHistory(exerciseId: string | null) {
     }
     setLoading(true)
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('sets')
-        .select('*')
+        .select('*, workout_sessions!inner(gym_id)')
         .eq('exercise_id', exerciseId)
         .order('created_at', { ascending: false })
+      if (gymId) query = query.eq('workout_sessions.gym_id', gymId)
+      const { data, error } = await query
       if (!error && data) setHistory(data as SetRow[])
     } catch {
       // réseau indisponible : on garde les données déjà en mémoire
     } finally {
       setLoading(false)
     }
-  }, [exerciseId])
+  }, [exerciseId, gymId])
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
   return { history, loading, refresh }
+}
+
+/** Exercices liés à une salle donnée (visibles dans le picker quand on est dans cette salle). */
+export function useExerciseGymLinks(gymId: string | null) {
+  const [exerciseIds, setExerciseIds] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+
+  const refresh = useCallback(async () => {
+    if (!gymId) {
+      setExerciseIds(new Set())
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    try {
+      const { data, error } = await supabase.from('exercise_gyms').select('exercise_id').eq('gym_id', gymId)
+      if (!error && data) setExerciseIds(new Set((data as { exercise_id: string }[]).map((r) => r.exercise_id)))
+    } catch {
+      // réseau indisponible
+    } finally {
+      setLoading(false)
+    }
+  }, [gymId])
+
+  useEffect(() => {
+    refresh()
+  }, [refresh])
+
+  const linkExercise = async (exerciseId: string) => {
+    if (!gymId) return
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user) return
+    await supabase
+      .from('exercise_gyms')
+      .upsert(
+        { exercise_id: exerciseId, gym_id: gymId, user_id: userData.user.id },
+        { onConflict: 'exercise_id,gym_id', ignoreDuplicates: true },
+      )
+    await refresh()
+  }
+
+  return { exerciseIds, loading, linkExercise, refresh }
 }
 
 export function useActivities(limit = 30) {

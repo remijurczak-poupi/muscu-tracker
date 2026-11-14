@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useActiveSession } from '../hooks/useActiveSession'
 import { useSessionSets } from '../hooks/useSessionSets'
-import { useExercises, useGyms, useActivities, useTemplates } from '../hooks/useData'
+import { useExercises, useGyms, useActivities, useTemplates, useExerciseGymLinks } from '../hooks/useData'
 import { useElapsed } from '../hooks/useElapsed'
 import ExerciseBlock from '../components/ExerciseBlock'
 import AddExercisePicker from '../components/AddExercisePicker'
@@ -22,6 +22,7 @@ export default function Home() {
   const { exercises, addExercise } = useExercises()
   const { templates, addTemplate } = useTemplates()
   const { sets, addSet, removeSet } = useSessionSets(session?.id ?? null)
+  const { exerciseIds: linkedExerciseIds, linkExercise } = useExerciseGymLinks(session?.gym_id ?? null)
   const [selectedGym, setSelectedGym] = useState<string>('')
   const [sessionExerciseIds, setSessionExerciseIds] = useState<string[]>([])
   const [starting, setStarting] = useState(false)
@@ -182,8 +183,11 @@ export default function Home() {
             <AddExercisePicker
               exercises={exercises}
               excludeIds={exerciseIdsInSession}
+              gymId={session.gym_id}
+              linkedExerciseIds={linkedExerciseIds}
               onPick={(id) => setSessionExerciseIds((ids) => [...ids, id])}
-              onCreate={(name, muscleGroup) => addExercise(name, muscleGroup)}
+              onCreate={(name, muscleGroup) => addExercise(name, muscleGroup, session.gym_id)}
+              onLinkExisting={linkExercise}
             />
           </div>
         </>
