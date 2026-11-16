@@ -9,11 +9,13 @@ const STEP = 15
 const DEFAULT_TARGET = 90
 const WARNING_LEAD = 10
 
-function beep(frequency: number, duration: number, volume = 0.2) {
+/** Carré/scie = beaucoup plus perçant qu'un sinus à volume égal, ça passe mieux par-dessus de la musique. */
+function beep(frequency: number, duration: number, volume = 0.2, type: OscillatorType = 'square') {
   try {
     const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
     const osc = ctx.createOscillator()
     const gain = ctx.createGain()
+    osc.type = type
     osc.frequency.value = frequency
     osc.connect(gain)
     gain.connect(ctx.destination)
@@ -26,10 +28,13 @@ function beep(frequency: number, duration: number, volume = 0.2) {
   }
 }
 
-/** Plusieurs bips à la suite, pour un signal audible même avec de la musique en fond. */
+/** Plusieurs bips à la suite (+ une harmonique grave en même temps), pour un signal qui passe au-dessus de la musique. */
 function beepBurst(frequency: number, duration: number, volume: number, times: number, gap: number) {
   for (let i = 0; i < times; i++) {
-    setTimeout(() => beep(frequency, duration, volume), i * gap)
+    setTimeout(() => {
+      beep(frequency, duration, volume, 'square')
+      beep(frequency / 2, duration, volume * 0.7, 'square')
+    }, i * gap)
   }
 }
 
@@ -46,13 +51,13 @@ export default function RestTimer({ elapsed }: Props) {
   useEffect(() => {
     if (target > WARNING_LEAD && elapsed >= target - WARNING_LEAD && elapsed < target && !warned.current) {
       warned.current = true
-      beepBurst(880, 0.2, 0.4, 3, 250)
-      if (navigator.vibrate) navigator.vibrate([120, 80, 120, 80, 120])
+      beepBurst(1046, 0.22, 0.9, 5, 220)
+      if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 150, 80, 150])
     }
     if (elapsed >= target && !alerted.current) {
       alerted.current = true
-      beepBurst(1175, 0.3, 0.45, 2, 350)
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200])
+      beepBurst(1568, 0.35, 1, 3, 300)
+      if (navigator.vibrate) navigator.vibrate([250, 120, 250, 120, 250])
     }
   }, [elapsed, target])
 
