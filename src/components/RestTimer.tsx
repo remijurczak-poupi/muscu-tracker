@@ -26,6 +26,13 @@ function beep(frequency: number, duration: number, volume = 0.2) {
   }
 }
 
+/** Plusieurs bips à la suite, pour un signal audible même avec de la musique en fond. */
+function beepBurst(frequency: number, duration: number, volume: number, times: number, gap: number) {
+  for (let i = 0; i < times; i++) {
+    setTimeout(() => beep(frequency, duration, volume), i * gap)
+  }
+}
+
 export default function RestTimer({ elapsed }: Props) {
   const [target, setTarget] = useState(DEFAULT_TARGET)
   const warned = useRef(false)
@@ -39,13 +46,13 @@ export default function RestTimer({ elapsed }: Props) {
   useEffect(() => {
     if (target > WARNING_LEAD && elapsed >= target - WARNING_LEAD && elapsed < target && !warned.current) {
       warned.current = true
-      beep(660, 0.15, 0.12)
-      if (navigator.vibrate) navigator.vibrate(60)
+      beepBurst(880, 0.2, 0.4, 3, 250)
+      if (navigator.vibrate) navigator.vibrate([120, 80, 120, 80, 120])
     }
     if (elapsed >= target && !alerted.current) {
       alerted.current = true
-      beep(880, 0.4)
-      if (navigator.vibrate) navigator.vibrate([150, 80, 150])
+      beepBurst(1175, 0.3, 0.45, 2, 350)
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200])
     }
   }, [elapsed, target])
 

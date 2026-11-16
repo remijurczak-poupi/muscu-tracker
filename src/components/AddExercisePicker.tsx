@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Exercise } from '../lib/types'
-import { groupByMuscle } from '../lib/grouping'
+import { groupByMuscle, MUSCLE_GROUPS } from '../lib/grouping'
 
 type Props = {
   exercises: Exercise[]
@@ -133,20 +133,44 @@ export default function AddExercisePicker({
               </button>
             )
           })}
-          {query.trim() && !exactMatch && (
-            <button
-              type="button"
-              onClick={async () => {
-                const group = selectedGroup === 'Sans catégorie' ? null : selectedGroup
-                const created = await onCreate(query.trim(), group)
-                if (created) onPick(created.id)
-                close()
-              }}
-              className="rounded-md px-3 py-2 text-left text-sm text-indigo-400 hover:bg-slate-800"
-            >
-              + Créer "{query.trim()}"{selectedGroup ? ` (${selectedGroup})` : ''}
-            </button>
-          )}
+          {query.trim() &&
+            !exactMatch &&
+            (selectedGroup ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  const group = selectedGroup === 'Sans catégorie' ? null : selectedGroup
+                  const created = await onCreate(query.trim(), group)
+                  if (created) onPick(created.id)
+                  close()
+                }}
+                className="rounded-md px-3 py-2 text-left text-sm text-indigo-400 hover:bg-slate-800"
+              >
+                + Créer "{query.trim()}" ({selectedGroup})
+              </button>
+            ) : (
+              <div className="rounded-md bg-slate-800/60 p-2">
+                <p className="mb-1.5 px-1 text-xs text-slate-400">
+                  Créer "{query.trim()}" dans quelle catégorie ?
+                </p>
+                <div className="grid grid-cols-2 gap-1">
+                  {MUSCLE_GROUPS.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={async () => {
+                        const created = await onCreate(query.trim(), g === 'Sans catégorie' ? null : g)
+                        if (created) onPick(created.id)
+                        close()
+                      }}
+                      className="rounded-md bg-slate-900 px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-slate-700"
+                    >
+                      {GROUP_ICONS[g]} {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
         </div>
       )}
 

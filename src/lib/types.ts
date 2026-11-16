@@ -58,6 +58,7 @@ export type BodyMetric = {
   user_id: string
   date: string
   weight_kg: number
+  photo_path: string | null
   created_at: string
 }
 

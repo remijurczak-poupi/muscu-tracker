@@ -1,6 +1,7 @@
 import type { Exercise } from './types'
 
-const GROUP_ORDER = ['Dos', 'Pec', 'Biceps', 'Triceps', 'Epaules', 'Jambes', 'Avant bras']
+export const GROUP_ORDER = ['Dos', 'Pec', 'Biceps', 'Triceps', 'Epaules', 'Jambes', 'Avant bras']
+export const MUSCLE_GROUPS = [...GROUP_ORDER, 'Sans catégorie']
 
 /** Regroupe et trie les exercices par muscle_group (ordre anatomique fixe, puis alpha, sans catégorie en dernier). */
 export function groupByMuscle(exercises: Exercise[]): [string, Exercise[]][] {

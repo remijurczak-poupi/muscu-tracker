@@ -9,26 +9,25 @@ import ExerciseGymCard from './ExerciseGymCard'
 
 type Props = {
   exercise: Exercise
-  sessionId: string
   gymId: string | null
   sets: SetRow[]
   sessionRestElapsed: number | null
   onAddSet: (params: { exerciseId: string; weightKg: number; reps: number; restSeconds: number | null }) => Promise<void>
   onRemoveSet: (id: string) => Promise<void>
+  onRemoveExercise: () => void
 }
 
 export default function ExerciseBlock({
   exercise,
-  sessionId,
   gymId,
   sets,
   sessionRestElapsed,
   onAddSet,
   onRemoveSet,
+  onRemoveExercise,
 }: Props) {
-  const { history } = useExerciseHistory(exercise.id, gymId)
-  const priorHistory = history.filter((s) => s.session_id !== sessionId)
-  const suggestion = suggestNextWeight(exercise, priorHistory)
+  const { history, refresh: refreshHistory } = useExerciseHistory(exercise.id, gymId)
+  const suggestion = suggestNextWeight(exercise, history)
 
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
@@ -53,16 +52,26 @@ export default function ExerciseBlock({
     if (Number.isNaN(w) || Number.isNaN(r)) return
     const rest = restOverride ? parseInt(restOverride, 10) : sessionRestElapsed
 
-    const maxWeightEver = priorHistory.length ? Math.max(...priorHistory.map((s) => s.weight_kg)) : 0
-    const repsAtThisWeight = priorHistory.filter((s) => s.weight_kg === w).map((s) => s.reps)
+    // "Déjà fait" inclut les séries plus tôt dans CETTE séance : si tu as déjà posé 16.5kg
+    // aujourd'hui et que tu en refais plus de reps, c'est un record de reps, pas de poids.
+    const maxWeightEver = history.length ? Math.max(...history.map((s) => s.weight_kg)) : 0
+    const repsAtThisWeight = history.filter((s) => s.weight_kg === w).map((s) => s.reps)
     const maxRepsAtThisWeight = repsAtThisWeight.length ? Math.max(...repsAtThisWeight) : 0
     const isRecord = w > maxWeightEver || (w === maxWeightEver && r > maxRepsAtThisWeight) || (w < maxWeightEver && repsAtThisWeight.length > 0 && r > maxRepsAtThisWeight)
 
     await onAddSet({ exerciseId: exercise.id, weightKg: w, reps: r, restSeconds: rest })
     setRestOverride('')
+    await refreshHistory()
     if (isRecord) {
       setPrMessage(w > maxWeightEver ? `🎉 Nouveau record de poids : ${w} kg !` : `🎉 Nouveau record de reps à ${w} kg : ${r} !`)
       setTimeout(() => setPrMessage(null), 4000)
+    }
+  }
+
+  const removeExercise = () => {
+    if (sets.length === 0 || confirm(`Supprimer "${exercise.name}" et ses ${sets.length} série(s) de cette séance ?`)) {
+      for (const s of sets) onRemoveSet(s.id)
+      onRemoveExercise()
     }
   }
 
@@ -72,7 +81,17 @@ export default function ExerciseBlock({
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-      <h3 className="mb-2 font-semibold text-white">{exercise.name}</h3>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="min-w-0 flex-1 truncate font-semibold text-white">{exercise.name}</h3>
+        <button
+          type="button"
+          onClick={removeExercise}
+          className="shrink-0 text-slate-500 hover:text-red-400"
+          aria-label="Retirer cet exercice de la séance"
+        >
+          🗑️
+        </button>
+      </div>
 
       {gymId ? (
         <ExerciseGymCard exerciseId={exercise.id} gymId={gymId} />
@@ -166,20 +185,19 @@ export default function ExerciseBlock({
           <button
             type="button"
             onClick={() => setShowTools((v) => !v)}
-            className="rounded-md bg-slate-800 px-3 py-2 text-sm text-slate-300"
-            aria-label="Plaques et échauffement"
+            className="rounded-md bg-slate-800 px-3 py-2 text-xs text-slate-300"
           >
-            🔧
+            🔧 Plaques / échauffement
           </button>
         )}
       </form>
 
       {showTools && (plateText || warmup.length > 0) && (
         <div className="mt-2 rounded-lg bg-slate-950/60 px-3 py-2 text-xs text-slate-400">
-          {plateText && <p>🔩 {plateText}</p>}
+          {plateText && <p>🔩 Plaques à charger (par côté) : {plateText}</p>}
           {warmup.length > 0 && (
             <p className="mt-1">
-              🔥 Échauffement : {warmup.map((s) => `${s.weight} kg × ${s.reps}`).join(' · ')}
+              🔥 Séries d'échauffement avant ce poids : {warmup.map((s) => `${s.weight} kg × ${s.reps}`).join(' · ')}
             </p>
           )}
         </div>

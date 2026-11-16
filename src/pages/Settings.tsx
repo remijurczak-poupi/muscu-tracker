@@ -3,16 +3,19 @@ import { useGyms, useExercises, useTemplates, useBodyMetrics } from '../hooks/us
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { buildHistoryCsv, downloadCsv } from '../lib/csvExport'
+import { MUSCLE_GROUPS } from '../lib/grouping'
 
 export default function Settings() {
   const { gyms, addGym, removeGym } = useGyms()
-  const { exercises, removeExercise } = useExercises()
+  const { exercises, removeExercise, updateExerciseMuscleGroup } = useExercises()
   const { templates, removeTemplate } = useTemplates()
-  const { metrics, addMetric, removeMetric } = useBodyMetrics()
+  const { metrics, addMetric, removeMetric, metricPhotoUrl } = useBodyMetrics()
   const { session } = useAuth()
   const [newGym, setNewGym] = useState('')
   const [metricDate, setMetricDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [metricWeight, setMetricWeight] = useState('')
+  const [metricPhoto, setMetricPhoto] = useState<File | null>(null)
+  const [savingMetric, setSavingMetric] = useState(false)
   const [exporting, setExporting] = useState(false)
 
   return (
@@ -68,9 +71,23 @@ export default function Settings() {
           {exercises.map((e) => (
             <li
               key={e.id}
-              className="flex items-center justify-between rounded-md bg-slate-900/60 px-3 py-2 text-sm text-slate-200"
+              className="flex items-center justify-between gap-2 rounded-md bg-slate-900/60 px-3 py-2 text-sm text-slate-200"
             >
-              {e.name}
+              <span className="flex-1 truncate">{e.name}</span>
+              <select
+                value={e.muscle_group ?? 'Sans catégorie'}
+                onChange={(ev) => {
+                  const v = ev.target.value
+                  updateExerciseMuscleGroup(e.id, v === 'Sans catégorie' ? null : v)
+                }}
+                className="rounded-md border border-slate-700 bg-slate-950 px-1.5 py-1 text-xs text-slate-300"
+              >
+                {MUSCLE_GROUPS.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
               <button
                 type="button"
                 onClick={() => {
@@ -121,8 +138,14 @@ export default function Settings() {
             e.preventDefault()
             const w = parseFloat(metricWeight)
             if (Number.isNaN(w)) return
-            await addMetric(metricDate, w)
-            setMetricWeight('')
+            setSavingMetric(true)
+            try {
+              await addMetric(metricDate, w, metricPhoto)
+              setMetricWeight('')
+              setMetricPhoto(null)
+            } finally {
+              setSavingMetric(false)
+            }
           }}
           className="mb-2 flex flex-wrap items-end gap-2"
         >
@@ -147,27 +170,49 @@ export default function Settings() {
               required
             />
           </label>
-          <button type="submit" className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white">
-            Ajouter
+          <label className="flex flex-col text-xs text-slate-400">
+            Photo (optionnel)
+            <input
+              type="file"
+              accept="image/*"
+              capture="user"
+              onChange={(e) => setMetricPhoto(e.target.files?.[0] ?? null)}
+              className="mt-1 w-40 text-xs text-slate-400"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={savingMetric}
+            className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {savingMetric ? '…' : 'Ajouter'}
           </button>
         </form>
         {metrics.length > 0 && (
           <ul className="flex flex-col gap-1">
-            {metrics.slice(0, 8).map((m) => (
-              <li
-                key={m.id}
-                className="flex items-center justify-between rounded-md bg-slate-900/60 px-3 py-2 text-sm text-slate-200"
-              >
-                {new Date(m.date).toLocaleDateString('fr-FR')} · {m.weight_kg} kg
-                <button
-                  type="button"
-                  onClick={() => removeMetric(m.id)}
-                  className="text-slate-500 hover:text-red-400"
+            {metrics.slice(0, 8).map((m) => {
+              const photoUrl = metricPhotoUrl(m)
+              return (
+                <li
+                  key={m.id}
+                  className="flex items-center justify-between rounded-md bg-slate-900/60 px-3 py-2 text-sm text-slate-200"
                 >
-                  ✕
-                </button>
-              </li>
-            ))}
+                  <span className="flex items-center gap-2">
+                    {photoUrl && (
+                      <img src={photoUrl} alt="" className="h-8 w-8 rounded-md object-cover" />
+                    )}
+                    {new Date(m.date).toLocaleDateString('fr-FR')} · {m.weight_kg} kg
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeMetric(m.id)}
+                    className="text-slate-500 hover:text-red-400"
+                  >
+                    ✕
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>

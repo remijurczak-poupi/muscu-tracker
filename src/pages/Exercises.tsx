@@ -1,28 +1,55 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { useExercises, useExerciseHistory } from '../hooks/useData'
+import { useExercises, useExerciseHistory, useGyms, useExerciseGymLinks } from '../hooks/useData'
 import { suggestNextWeight } from '../lib/suggestions'
 import { formatDate } from '../lib/time'
 import { groupByMuscle } from '../lib/grouping'
 
 export default function Exercises() {
   const { exercises, loading } = useExercises()
+  const { gyms, loading: gymsLoading } = useGyms()
   const [selected, setSelected] = useState<string | null>(null)
+  const [gymId, setGymId] = useState<string | null>(null)
 
-  if (loading) return <div className="p-6 text-center text-slate-500">Chargement…</div>
+  useEffect(() => {
+    if (!gymsLoading && gymId === null && gyms.length > 0) setGymId(gyms[0].id)
+  }, [gymsLoading, gyms, gymId])
+
+  const { exerciseIds: linkedExerciseIds } = useExerciseGymLinks(gymId)
+
+  if (loading || gymsLoading) return <div className="p-6 text-center text-slate-500">Chargement…</div>
 
   const exercise = exercises.find((e) => e.id === selected)
-  const groups = groupByMuscle(exercises)
+  const visibleExercises = gymId ? exercises.filter((e) => linkedExerciseIds.has(e.id)) : exercises
+  const groups = groupByMuscle(visibleExercises)
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-6">
       <h1 className="mb-4 text-lg font-bold text-white">Exercices</h1>
 
+      {gyms.length > 0 && (
+        <select
+          value={gymId ?? ''}
+          onChange={(e) => {
+            setGymId(e.target.value || null)
+            setSelected(null)
+          }}
+          className="mb-4 w-full rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+        >
+          {gyms.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+          <option value="">Toutes les salles</option>
+        </select>
+      )}
+
       {!exercise && (
         <div className="flex flex-col gap-4">
-          {exercises.length === 0 && (
+          {visibleExercises.length === 0 && (
             <p className="text-sm text-slate-500">
-              Aucun exercice pour l'instant — ajoute-en un depuis l'onglet Séance.
+              Aucun exercice encore lié à cette salle — ajoute-en depuis l'onglet Séance.
             </p>
           )}
           {groups.map(([group, list]) => (
@@ -48,7 +75,12 @@ export default function Exercises() {
       )}
 
       {exercise && (
-        <ExerciseDetail exerciseId={exercise.id} name={exercise.name} onBack={() => setSelected(null)} />
+        <ExerciseDetail
+          exerciseId={exercise.id}
+          name={exercise.name}
+          gymId={gymId}
+          onBack={() => setSelected(null)}
+        />
       )}
     </div>
   )
@@ -57,14 +89,16 @@ export default function Exercises() {
 function ExerciseDetail({
   exerciseId,
   name,
+  gymId,
   onBack,
 }: {
   exerciseId: string
   name: string
+  gymId: string | null
   onBack: () => void
 }) {
   const { exercises } = useExercises()
-  const { history, loading } = useExerciseHistory(exerciseId)
+  const { history, loading } = useExerciseHistory(exerciseId, gymId)
   const exercise = exercises.find((e) => e.id === exerciseId)
 
   const chartData = [...history]

@@ -170,12 +170,12 @@ export default function Home() {
                 <ExerciseBlock
                   key={exId}
                   exercise={exercise}
-                  sessionId={session.id}
                   gymId={session.gym_id}
                   sets={sets.filter((s) => s.exercise_id === exId)}
                   sessionRestElapsed={lastSetAt !== null ? restElapsed : null}
                   onAddSet={addSet}
                   onRemoveSet={removeSet}
+                  onRemoveExercise={() => setSessionExerciseIds((ids) => ids.filter((id) => id !== exId))}
                 />
               )
             })}

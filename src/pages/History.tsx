@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSessions, useExercises, useGyms, useActivities, useWeekStats } from '../hooks/useData'
+import { useSessions, useExercises, useGyms, useActivities, useWeekStats, useTemplates } from '../hooks/useData'
 import { useSessionSets } from '../hooks/useSessionSets'
 import { formatDateTime, formatSeconds, formatMinutes } from '../lib/time'
 import { sportIcon, sportLabel } from '../lib/sports'
@@ -142,6 +142,7 @@ function SessionDetail({
   exercises: { id: string; name: string }[]
 }) {
   const { sets, loading, removeSet, updateSet } = useSessionSets(sessionId)
+  const { addTemplate } = useTemplates()
   const [editingId, setEditingId] = useState<string | null>(null)
 
   if (loading) return <p className="px-4 pb-3 text-xs text-slate-500">Chargement…</p>
@@ -156,6 +157,16 @@ function SessionDetail({
 
   return (
     <div className="flex flex-col gap-3 border-t border-slate-800 px-4 py-3">
+      <button
+        type="button"
+        onClick={async () => {
+          const name = window.prompt('Nom du template ?')
+          if (name && name.trim()) await addTemplate(name.trim(), Array.from(byExercise.keys()))
+        }}
+        className="self-start text-xs text-indigo-400 underline"
+      >
+        💾 Enregistrer comme template
+      </button>
       {Array.from(byExercise.entries()).map(([exId, exSets]) => (
         <div key={exId}>
           <p className="mb-1 text-sm font-semibold text-slate-200">

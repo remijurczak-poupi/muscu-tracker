@@ -8,8 +8,29 @@ export function useGyms() {
 
   const refresh = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('gyms').select('*').order('name')
-      if (!error && data) setGyms(data as Gym[])
+      const [gymsRes, sessionsRes] = await Promise.all([
+        supabase.from('gyms').select('*'),
+        supabase
+          .from('workout_sessions')
+          .select('gym_id, started_at')
+          .not('gym_id', 'is', null)
+          .order('started_at', { ascending: false }),
+      ])
+      if (!gymsRes.error && gymsRes.data) {
+        const lastUsed = new Map<string, string>()
+        for (const s of (sessionsRes.data ?? []) as { gym_id: string; started_at: string }[]) {
+          if (!lastUsed.has(s.gym_id)) lastUsed.set(s.gym_id, s.started_at)
+        }
+        const sorted = [...(gymsRes.data as Gym[])].sort((a, b) => {
+          const ta = lastUsed.get(a.id)
+          const tb = lastUsed.get(b.id)
+          if (ta && tb) return new Date(tb).getTime() - new Date(ta).getTime()
+          if (ta) return -1
+          if (tb) return 1
+          return a.name.localeCompare(b.name)
+        })
+        setGyms(sorted)
+      }
     } catch {
       // réseau indisponible : on garde les données déjà en mémoire
     } finally {
@@ -78,7 +99,12 @@ export function useExercises() {
     await refresh()
   }
 
-  return { exercises, loading, addExercise, removeExercise, refresh }
+  const updateExerciseMuscleGroup = async (id: string, muscleGroup: string | null) => {
+    await supabase.from('exercises').update({ muscle_group: muscleGroup }).eq('id', id)
+    await refresh()
+  }
+
+  return { exercises, loading, addExercise, removeExercise, updateExerciseMuscleGroup, refresh }
 }
 
 /** gymId filtre l'historique à une seule salle (poids/suggestions dépendent de l'équipement de la salle). */
@@ -300,10 +326,24 @@ export function useBodyMetrics() {
     refresh()
   }, [refresh])
 
-  const addMetric = async (date: string, weightKg: number) => {
+  const addMetric = async (date: string, weightKg: number, photo?: File | null) => {
     const { data: userData } = await supabase.auth.getUser()
     if (!userData.user) return
-    await supabase.from('body_metrics').insert({ date, weight_kg: weightKg, user_id: userData.user.id })
+    const { data } = await supabase
+      .from('body_metrics')
+      .insert({ date, weight_kg: weightKg, user_id: userData.user.id })
+      .select()
+      .single()
+    const metric = data as BodyMetric | null
+    if (metric && photo) {
+      const path = `${userData.user.id}/body/${metric.id}`
+      const { error: uploadError } = await supabase.storage
+        .from('exercise-photos')
+        .upload(path, photo, { upsert: true, contentType: photo.type })
+      if (!uploadError) {
+        await supabase.from('body_metrics').update({ photo_path: path }).eq('id', metric.id)
+      }
+    }
     await refresh()
   }
 
@@ -312,7 +352,10 @@ export function useBodyMetrics() {
     await refresh()
   }
 
-  return { metrics, loading, addMetric, removeMetric, refresh }
+  const metricPhotoUrl = (metric: BodyMetric) =>
+    metric.photo_path ? supabase.storage.from('exercise-photos').getPublicUrl(metric.photo_path).data.publicUrl : null
+
+  return { metrics, loading, addMetric, removeMetric, metricPhotoUrl, refresh }
 }
 
 export function useWeekStats() {
