@@ -42,6 +42,7 @@ export default function RestTimer({ elapsed }: Props) {
   const [target, setTarget] = useState(DEFAULT_TARGET)
   const warned = useRef(false)
   const alerted = useRef(false)
+  const prevElapsed = useRef(elapsed)
 
   useEffect(() => {
     warned.current = false
@@ -49,6 +50,14 @@ export default function RestTimer({ elapsed }: Props) {
   }, [target])
 
   useEffect(() => {
+    // Un repos qui redémarre (nouvelle série) fait retomber elapsed près de 0 :
+    // sans ça, les refs restaient à true après le premier repos et plus aucun bip ne sonnait ensuite.
+    if (elapsed < prevElapsed.current) {
+      warned.current = false
+      alerted.current = false
+    }
+    prevElapsed.current = elapsed
+
     if (target > WARNING_LEAD && elapsed >= target - WARNING_LEAD && elapsed < target && !warned.current) {
       warned.current = true
       beepBurst(1046, 0.22, 0.9, 5, 220)
