@@ -17,7 +17,7 @@ function tabClass(active: boolean): string {
 
 export default function Home() {
   const [mode, setMode] = useState<'muscu' | 'sport'>('muscu')
-  const { session, loading: sessionLoading, startSession, endSession } = useActiveSession()
+  const { session, loading: sessionLoading, startSession, endSession, cancelSession } = useActiveSession()
   const { gyms, addGym } = useGyms()
   const { exercises, addExercise } = useExercises()
   const { templates, addTemplate } = useTemplates()
@@ -148,15 +148,28 @@ export default function Home() {
                   </button>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm('Terminer la séance ?')) endSession()
-                }}
-                className="rounded-md bg-emerald-600/90 px-3 py-2 text-sm font-semibold text-white"
-              >
-                Terminer
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Terminer la séance ?')) endSession()
+                  }}
+                  className="rounded-md bg-emerald-600/90 px-3 py-2 text-sm font-semibold text-white"
+                >
+                  Terminer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Annuler et supprimer définitivement cette séance et tout ce qui a été enregistré dedans ? Impossible à annuler.')) {
+                      cancelSession()
+                    }
+                  }}
+                  className="text-xs text-slate-500 underline hover:text-red-400"
+                >
+                  Annuler la séance
+                </button>
+              </div>
             </div>
 
             {lastSetAt !== null && <RestTimer elapsed={restElapsed} />}

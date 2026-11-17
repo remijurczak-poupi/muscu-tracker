@@ -45,5 +45,11 @@ export function useActiveSession() {
     await refresh()
   }
 
-  return { session, loading, startSession, endSession, refresh }
+  const cancelSession = async () => {
+    if (!session) return
+    await supabase.from('workout_sessions').delete().eq('id', session.id)
+    await refresh()
+  }
+
+  return { session, loading, startSession, endSession, cancelSession, refresh }
 }
