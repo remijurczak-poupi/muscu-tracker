@@ -10,7 +10,6 @@ function getContext(): AudioContext | null {
       const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
       ctx = new Ctor()
     }
-    if (ctx.state === 'suspended') void ctx.resume()
     return ctx
   } catch {
     return null
@@ -45,4 +44,54 @@ export function beepBurst(frequency: number, duration: number, volume: number, t
       beep(frequency / 2, duration, volume * 0.7, 'square')
     }, i * gap)
   }
+}
+
+let pendingAlerts: (() => void)[] = []
+let gestureArmed = false
+
+function armGestureUnlock() {
+  if (gestureArmed) return
+  gestureArmed = true
+  const onGesture = () => {
+    window.removeEventListener('pointerdown', onGesture)
+    gestureArmed = false
+    const actions = pendingAlerts
+    pendingAlerts = []
+    const audioCtx = getContext()
+    if (!audioCtx) return
+    // Ce resume() a lieu pendant un vrai tap de l'utilisateur : ça débloque la lecture audio
+    // même quand la politique anti-lecture-automatique bloquait tout jusque-là.
+    void audioCtx.resume().finally(() => actions.forEach((fn) => fn()))
+  }
+  window.addEventListener('pointerdown', onGesture)
+}
+
+/**
+ * Joue l'alerte tout de suite si l'audio est débloqué, sinon la met en attente et la joue au
+ * premier tap. Nécessaire car Android peut décharger l'onglet en arrière-plan (ex: en utilisant
+ * une appli plus lourde comme Maps) — au retour, la page recharge et l'audio redevient bloqué par
+ * la politique anti-lecture-automatique tant qu'aucune interaction n'a eu lieu sur la page.
+ */
+export function playAlert(fn: () => void) {
+  const audioCtx = getContext()
+  if (!audioCtx) return
+  if (audioCtx.state === 'running') {
+    fn()
+    return
+  }
+  // Un contexte qui vient seulement de se mettre en veille (pas de blocage lié à l'autoplay)
+  // se débloque avec un simple resume(), sans attendre de tap.
+  audioCtx
+    .resume()
+    .then(() => {
+      if (audioCtx.state === 'running') fn()
+      else {
+        pendingAlerts.push(fn)
+        armGestureUnlock()
+      }
+    })
+    .catch(() => {
+      pendingAlerts.push(fn)
+      armGestureUnlock()
+    })
 }

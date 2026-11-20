@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatSeconds } from '../lib/time'
-import { beepBurst } from '../lib/audio'
+import { beepBurst, playAlert } from '../lib/audio'
 import { useWakeLock } from '../hooks/useWakeLock'
 
 type Props = {
@@ -37,13 +37,17 @@ export default function RestTimer({ elapsed }: Props) {
 
     if (target > WARNING_LEAD && elapsed >= target - WARNING_LEAD && elapsed < target && !warned.current) {
       warned.current = true
-      beepBurst(1046, 0.22, 0.9, 5, 220)
-      if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 150, 80, 150])
+      playAlert(() => {
+        beepBurst(1046, 0.22, 0.9, 5, 220)
+        if (navigator.vibrate) navigator.vibrate([150, 80, 150, 80, 150, 80, 150])
+      })
     }
     if (elapsed >= target && !alerted.current) {
       alerted.current = true
-      beepBurst(1568, 0.35, 1, 3, 300)
-      if (navigator.vibrate) navigator.vibrate([250, 120, 250, 120, 250])
+      playAlert(() => {
+        beepBurst(1568, 0.35, 1, 3, 300)
+        if (navigator.vibrate) navigator.vibrate([250, 120, 250, 120, 250])
+      })
     }
   }, [elapsed, target])
 
