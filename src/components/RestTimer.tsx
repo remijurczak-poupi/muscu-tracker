@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { formatSeconds } from '../lib/time'
+import { beepBurst } from '../lib/audio'
+import { useWakeLock } from '../hooks/useWakeLock'
 
 type Props = {
   elapsed: number
@@ -9,40 +11,15 @@ const STEP = 15
 const DEFAULT_TARGET = 90
 const WARNING_LEAD = 10
 
-/** Carré/scie = beaucoup plus perçant qu'un sinus à volume égal, ça passe mieux par-dessus de la musique. */
-function beep(frequency: number, duration: number, volume = 0.2, type: OscillatorType = 'square') {
-  try {
-    const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = type
-    osc.frequency.value = frequency
-    osc.connect(gain)
-    gain.connect(ctx.destination)
-    gain.gain.setValueAtTime(volume, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration)
-    osc.start()
-    osc.stop(ctx.currentTime + duration)
-  } catch {
-    // audio indisponible, tant pis
-  }
-}
-
-/** Plusieurs bips à la suite (+ une harmonique grave en même temps), pour un signal qui passe au-dessus de la musique. */
-function beepBurst(frequency: number, duration: number, volume: number, times: number, gap: number) {
-  for (let i = 0; i < times; i++) {
-    setTimeout(() => {
-      beep(frequency, duration, volume, 'square')
-      beep(frequency / 2, duration, volume * 0.7, 'square')
-    }, i * gap)
-  }
-}
-
 export default function RestTimer({ elapsed }: Props) {
   const [target, setTarget] = useState(DEFAULT_TARGET)
   const warned = useRef(false)
   const alerted = useRef(false)
   const prevElapsed = useRef(elapsed)
+
+  // Un repos actif maintient l'écran allumé : sinon le téléphone se verrouille, les timers JS
+  // sont suspendus par le navigateur et le bip ne sonne qu'au retour sur l'appli, très en retard.
+  useWakeLock(true)
 
   useEffect(() => {
     warned.current = false
