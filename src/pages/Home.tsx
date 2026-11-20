@@ -3,10 +3,11 @@ import { useActiveSession } from '../hooks/useActiveSession'
 import { useSessionSets } from '../hooks/useSessionSets'
 import { useExercises, useGyms, useActivities, useTemplates, useExerciseGymLinks } from '../hooks/useData'
 import { useElapsed } from '../hooks/useElapsed'
+import { useOutboxStatus } from '../hooks/useOutboxStatus'
 import ExerciseBlock from '../components/ExerciseBlock'
 import AddExercisePicker from '../components/AddExercisePicker'
 import RestTimer from '../components/RestTimer'
-import { formatDuration, formatMinutes, formatDateTime } from '../lib/time'
+import { formatDuration, formatDateTime } from '../lib/time'
 import { SPORTS, sportIcon, sportLabel } from '../lib/sports'
 
 function tabClass(active: boolean): string {
@@ -21,7 +22,7 @@ export default function Home() {
   const { gyms, addGym } = useGyms()
   const { exercises, addExercise } = useExercises()
   const { templates, addTemplate } = useTemplates()
-  const { sets, addSet, removeSet } = useSessionSets(session?.id ?? null)
+  const { sets, pendingIds, addSet, removeSet } = useSessionSets(session?.id ?? null)
   const { exerciseIds: linkedExerciseIds, linkExercise } = useExerciseGymLinks(session?.gym_id ?? null)
   const [selectedGym, setSelectedGym] = useState<string>('')
   const [sessionExerciseIds, setSessionExerciseIds] = useState<string[]>([])
@@ -41,6 +42,7 @@ export default function Home() {
   const totalElapsed = useElapsed(session ? new Date(session.started_at).getTime() : null)
 
   const gym = gyms.find((g) => g.id === session?.gym_id)
+  const outbox = useOutboxStatus()
 
   return (
     <div className="mx-auto max-w-lg px-4 pb-28 pt-6">
@@ -128,6 +130,12 @@ export default function Home() {
       ) : (
         <>
           <div className="sticky top-0 z-10 -mx-4 bg-slate-950/95 px-4 pb-3 pt-2 backdrop-blur">
+            {(!outbox.online || outbox.count > 0) && (
+              <p className="mb-2 rounded-md bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
+                {!outbox.online ? '📴 Hors-ligne' : '🔄 Synchronisation'}
+                {outbox.count > 0 ? ` — ${outbox.count} en attente` : ' — tout est enregistré localement'}
+              </p>
+            )}
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <h1 className="text-lg font-bold text-white">Séance en cours</h1>
@@ -185,6 +193,7 @@ export default function Home() {
                   exercise={exercise}
                   gymId={session.gym_id}
                   sets={sets.filter((s) => s.exercise_id === exId)}
+                  pendingIds={pendingIds}
                   sessionRestElapsed={lastSetAt !== null ? restElapsed : null}
                   onAddSet={addSet}
                   onRemoveSet={removeSet}
@@ -244,27 +253,30 @@ function SportLogger() {
   const [sport, setSport] = useState(SPORTS[0].key)
   const [durH, setDurH] = useState('')
   const [durM, setDurM] = useState('')
+  const [durS, setDurS] = useState('')
   const [distance, setDistance] = useState('')
   const [date, setDate] = useState(() => toLocalInputValue(new Date()))
   const [saving, setSaving] = useState(false)
 
   const def = SPORTS.find((s) => s.key === sport) ?? SPORTS[0]
-  const totalMinutes = (parseInt(durH || '0', 10) || 0) * 60 + (parseInt(durM || '0', 10) || 0)
+  const totalSeconds =
+    (parseInt(durH || '0', 10) || 0) * 3600 + (parseInt(durM || '0', 10) || 0) * 60 + (parseInt(durS || '0', 10) || 0)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (totalMinutes <= 0) return
+    if (totalSeconds <= 0) return
     const km = def.hasDistance && distance ? parseFloat(distance) : null
     setSaving(true)
     try {
       await addActivity({
         sport,
         startedAt: new Date(date).toISOString(),
-        durationMinutes: totalMinutes,
+        durationSeconds: totalSeconds,
         distanceKm: km,
       })
       setDurH('')
       setDurM('')
+      setDurS('')
       setDistance('')
       setDate(toLocalInputValue(new Date()))
     } finally {
@@ -315,6 +327,17 @@ function SportLogger() {
                 className="w-14 rounded-md border border-slate-700 bg-slate-950 px-2 py-2 text-white"
               />
               <span className="text-slate-500">min</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={59}
+                value={durS}
+                onChange={(e) => setDurS(e.target.value)}
+                placeholder="00"
+                className="w-14 rounded-md border border-slate-700 bg-slate-950 px-2 py-2 text-white"
+              />
+              <span className="text-slate-500">s</span>
             </span>
           </label>
 
@@ -363,7 +386,7 @@ function SportLogger() {
               <div className="text-sm text-slate-200">
                 <span className="mr-1">{sportIcon(a.sport)}</span>
                 <span className="font-semibold">{sportLabel(a.sport)}</span>
-                <span className="text-slate-500"> · {formatMinutes(a.duration_minutes)}</span>
+                <span className="text-slate-500"> · {formatDuration(a.duration_seconds)}</span>
                 {a.distance_km !== null && <span className="text-slate-500"> · {a.distance_km} km</span>}
                 <p className="text-xs text-slate-600">{formatDateTime(a.started_at)}</p>
               </div>

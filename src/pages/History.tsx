@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSessions, useExercises, useGyms, useActivities, useWeekStats, useTemplates } from '../hooks/useData'
 import { useSessionSets } from '../hooks/useSessionSets'
-import { formatDateTime, formatSeconds, formatMinutes } from '../lib/time'
+import { formatDateTime, formatSeconds, formatDuration } from '../lib/time'
 import { sportIcon, sportLabel } from '../lib/sports'
 import type { Activity, SetRow, WorkoutSession } from '../lib/types'
 
@@ -64,16 +64,16 @@ export default function History() {
 }
 
 function WeekSummary() {
-  const { volume, sessionCount, sportMinutes, loading } = useWeekStats()
+  const { volume, sessionCount, sportSeconds, loading } = useWeekStats()
 
-  if (loading || (sessionCount === 0 && sportMinutes === 0)) return null
+  if (loading || (sessionCount === 0 && sportSeconds === 0)) return null
 
   return (
     <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
       <p className="mb-1 text-xs uppercase tracking-wide text-slate-500">Cette semaine</p>
       <p className="text-sm text-slate-200">
         🏋️ {sessionCount} séance{sessionCount > 1 ? 's' : ''} · {Math.round(volume).toLocaleString('fr-FR')} kg soulevés
-        {sportMinutes > 0 && <> · 🏃 {formatMinutes(sportMinutes)} de sport</>}
+        {sportSeconds > 0 && <> · 🏃 {formatDuration(sportSeconds)} de sport</>}
       </p>
     </div>
   )
@@ -85,7 +85,7 @@ function ActivityCard({ a, onRemove }: { a: Activity; onRemove: () => void }) {
       <div className="text-sm text-slate-200">
         <span className="mr-1">{sportIcon(a.sport)}</span>
         <span className="font-semibold">{sportLabel(a.sport)}</span>
-        <span className="text-slate-500"> · {formatMinutes(a.duration_minutes)}</span>
+        <span className="text-slate-500"> · {formatDuration(a.duration_seconds)}</span>
         {a.distance_km !== null && <span className="text-slate-500"> · {a.distance_km} km</span>}
         <p className="text-xs text-slate-600">{formatDateTime(a.started_at)}</p>
       </div>

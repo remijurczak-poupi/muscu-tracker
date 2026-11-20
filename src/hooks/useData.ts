@@ -1,12 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import type { Activity, BodyMetric, Exercise, Gym, SessionTemplate, SetRow, WorkoutSession } from '../lib/types'
+import { useAuth } from './useAuth'
+import { queueInsert, getPendingInserts, cacheGet, cacheSet, onOutboxChange } from '../lib/offline'
+import type {
+  Activity,
+  BodyMetric,
+  Exercise,
+  ExerciseGymLink,
+  Gym,
+  SessionTemplate,
+  SetRow,
+  WorkoutSession,
+} from '../lib/types'
 
 export function useGyms() {
+  const { session: authSession } = useAuth()
   const [gyms, setGyms] = useState<Gym[]>([])
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
+    let fromDb: Gym[] | null = null
+    let lastUsed = new Map<string, string>()
     try {
       const [gymsRes, sessionsRes] = await Promise.all([
         supabase.from('gyms').select('*'),
@@ -17,36 +31,54 @@ export function useGyms() {
           .order('started_at', { ascending: false }),
       ])
       if (!gymsRes.error && gymsRes.data) {
-        const lastUsed = new Map<string, string>()
+        fromDb = gymsRes.data as Gym[]
+        cacheSet('gyms', fromDb)
         for (const s of (sessionsRes.data ?? []) as { gym_id: string; started_at: string }[]) {
           if (!lastUsed.has(s.gym_id)) lastUsed.set(s.gym_id, s.started_at)
         }
-        const sorted = [...(gymsRes.data as Gym[])].sort((a, b) => {
-          const ta = lastUsed.get(a.id)
-          const tb = lastUsed.get(b.id)
-          if (ta && tb) return new Date(tb).getTime() - new Date(ta).getTime()
-          if (ta) return -1
-          if (tb) return 1
-          return a.name.localeCompare(b.name)
-        })
-        setGyms(sorted)
+        cacheSet('gyms-last-used', Array.from(lastUsed.entries()))
       }
     } catch {
-      // réseau indisponible : on garde les données déjà en mémoire
+      // hors-ligne : on repart du cache
     } finally {
       setLoading(false)
     }
+    const base = fromDb ?? cacheGet<Gym[]>('gyms') ?? []
+    if (lastUsed.size === 0) {
+      const cachedLastUsed = cacheGet<[string, string][]>('gyms-last-used')
+      if (cachedLastUsed) lastUsed = new Map(cachedLastUsed)
+    }
+    const pending = getPendingInserts<Gym>('gyms')
+    const merged = [...base, ...pending.filter((p) => !base.some((b) => b.id === p.id))]
+    const sorted = merged.sort((a, b) => {
+      const ta = lastUsed.get(a.id)
+      const tb = lastUsed.get(b.id)
+      if (ta && tb) return new Date(tb).getTime() - new Date(ta).getTime()
+      if (ta) return -1
+      if (tb) return 1
+      return a.name.localeCompare(b.name)
+    })
+    setGyms(sorted)
   }, [])
 
   useEffect(() => {
     refresh()
+    return onOutboxChange(refresh)
   }, [refresh])
 
   const addGym = async (name: string) => {
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
-    await supabase.from('gyms').insert({ name, user_id: userData.user.id })
-    await refresh()
+    const userId = authSession?.user.id
+    if (!userId) return
+    const row: Gym = { id: crypto.randomUUID(), user_id: userId, name, created_at: new Date().toISOString() }
+    setGyms((prev) => [row, ...prev])
+    void (async () => {
+      try {
+        const { error } = await supabase.from('gyms').insert(row)
+        if (error) throw error
+      } catch {
+        queueInsert('gyms', row)
+      }
+    })()
   }
 
   const removeGym = async (id: string) => {
@@ -58,39 +90,73 @@ export function useGyms() {
 }
 
 export function useExercises() {
+  const { session: authSession } = useAuth()
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
+    let fromDb: Exercise[] | null = null
     try {
       const { data, error } = await supabase.from('exercises').select('*').order('name')
-      if (!error && data) setExercises(data as Exercise[])
+      if (!error && data) {
+        fromDb = data as Exercise[]
+        cacheSet('exercises', fromDb)
+      }
     } catch {
-      // réseau indisponible : on garde les données déjà en mémoire
+      // hors-ligne : on repart du cache
     } finally {
       setLoading(false)
     }
+    const base = fromDb ?? cacheGet<Exercise[]>('exercises') ?? []
+    const pending = getPendingInserts<Exercise>('exercises')
+    const merged = [...base, ...pending.filter((p) => !base.some((b) => b.id === p.id))].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+    setExercises(merged)
   }, [])
 
   useEffect(() => {
     refresh()
+    return onOutboxChange(refresh)
   }, [refresh])
 
   const addExercise = async (name: string, muscleGroup: string | null, gymId?: string | null) => {
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return null
-    const { data } = await supabase
-      .from('exercises')
-      .insert({ name, muscle_group: muscleGroup, user_id: userData.user.id })
-      .select()
-      .single()
-    const exercise = (data as Exercise) ?? null
-    if (exercise && gymId) {
-      await supabase
-        .from('exercise_gyms')
-        .insert({ exercise_id: exercise.id, gym_id: gymId, user_id: userData.user.id })
+    const userId = authSession?.user.id
+    if (!userId) return null
+    const exercise: Exercise = {
+      id: crypto.randomUUID(),
+      user_id: userId,
+      name,
+      muscle_group: muscleGroup,
+      weight_increment: 2.5,
+      created_at: new Date().toISOString(),
     }
-    await refresh()
+    // Optimiste et non bloquant : utilisable (sélectionnable, liable à la salle) tout de suite.
+    setExercises((prev) => [...prev, exercise].sort((a, b) => a.name.localeCompare(b.name)))
+    void (async () => {
+      try {
+        const { error } = await supabase.from('exercises').insert(exercise)
+        if (error) throw error
+      } catch {
+        queueInsert('exercises', exercise)
+      }
+    })()
+    if (gymId) {
+      const link: ExerciseGymLink = {
+        exercise_id: exercise.id,
+        gym_id: gymId,
+        user_id: userId,
+        created_at: new Date().toISOString(),
+      }
+      void (async () => {
+        try {
+          const { error } = await supabase.from('exercise_gyms').insert(link)
+          if (error) throw error
+        } catch {
+          queueInsert('exercise_gyms', link as unknown as Record<string, unknown>)
+        }
+      })()
+    }
     return exercise
   }
 
@@ -144,6 +210,7 @@ export function useExerciseHistory(exerciseId: string | null, gymId?: string | n
 
 /** Exercices liés à une salle donnée (visibles dans le picker quand on est dans cette salle). */
 export function useExerciseGymLinks(gymId: string | null) {
+  const { session: authSession } = useAuth()
   const [exerciseIds, setExerciseIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
 
@@ -153,38 +220,53 @@ export function useExerciseGymLinks(gymId: string | null) {
       setLoading(false)
       return
     }
-    setLoading(true)
+    let fromDb: string[] | null = null
     try {
       const { data, error } = await supabase.from('exercise_gyms').select('exercise_id').eq('gym_id', gymId)
-      if (!error && data) setExerciseIds(new Set((data as { exercise_id: string }[]).map((r) => r.exercise_id)))
+      if (!error && data) {
+        fromDb = (data as { exercise_id: string }[]).map((r) => r.exercise_id)
+        cacheSet(`exercise-gyms:${gymId}`, fromDb)
+      }
     } catch {
-      // réseau indisponible
+      // hors-ligne : on repart du cache
     } finally {
       setLoading(false)
     }
+    const base = fromDb ?? cacheGet<string[]>(`exercise-gyms:${gymId}`) ?? []
+    const pending = getPendingInserts<ExerciseGymLink>('exercise_gyms')
+      .filter((l) => l.gym_id === gymId)
+      .map((l) => l.exercise_id)
+    setExerciseIds(new Set([...base, ...pending]))
   }, [gymId])
 
   useEffect(() => {
     refresh()
+    return onOutboxChange(refresh)
   }, [refresh])
 
   const linkExercise = async (exerciseId: string) => {
     if (!gymId) return
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
-    await supabase
-      .from('exercise_gyms')
-      .upsert(
-        { exercise_id: exerciseId, gym_id: gymId, user_id: userData.user.id },
-        { onConflict: 'exercise_id,gym_id', ignoreDuplicates: true },
-      )
-    await refresh()
+    const userId = authSession?.user.id
+    if (!userId) return
+    setExerciseIds((prev) => new Set(prev).add(exerciseId))
+    const link: ExerciseGymLink = { exercise_id: exerciseId, gym_id: gymId, user_id: userId, created_at: new Date().toISOString() }
+    void (async () => {
+      try {
+        const { error } = await supabase
+          .from('exercise_gyms')
+          .upsert(link, { onConflict: 'exercise_id,gym_id', ignoreDuplicates: true })
+        if (error) throw error
+      } catch {
+        queueInsert('exercise_gyms', link as unknown as Record<string, unknown>)
+      }
+    })()
   }
 
   return { exerciseIds, loading, linkExercise, refresh }
 }
 
 export function useActivities(limit = 30) {
+  const { session: authSession } = useAuth()
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -210,16 +292,16 @@ export function useActivities(limit = 30) {
   const addActivity = async (params: {
     sport: string
     startedAt: string
-    durationMinutes: number
+    durationSeconds: number
     distanceKm: number | null
   }) => {
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
+    const userId = authSession?.user.id
+    if (!userId) return
     await supabase.from('activities').insert({
-      user_id: userData.user.id,
+      user_id: userId,
       sport: params.sport,
       started_at: params.startedAt,
-      duration_minutes: params.durationMinutes,
+      duration_seconds: params.durationSeconds,
       distance_km: params.distanceKm,
     })
     await refresh()
@@ -265,6 +347,7 @@ export function useSessions(limit = 30) {
 }
 
 export function useTemplates() {
+  const { session: authSession } = useAuth()
   const [templates, setTemplates] = useState<SessionTemplate[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -287,11 +370,9 @@ export function useTemplates() {
   }, [refresh])
 
   const addTemplate = async (name: string, exerciseIds: string[]) => {
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
-    await supabase
-      .from('session_templates')
-      .insert({ name, exercise_ids: exerciseIds, user_id: userData.user.id })
+    const userId = authSession?.user.id
+    if (!userId) return
+    await supabase.from('session_templates').insert({ name, exercise_ids: exerciseIds, user_id: userId })
     await refresh()
   }
 
@@ -304,6 +385,7 @@ export function useTemplates() {
 }
 
 export function useBodyMetrics() {
+  const { session: authSession } = useAuth()
   const [metrics, setMetrics] = useState<BodyMetric[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -327,16 +409,16 @@ export function useBodyMetrics() {
   }, [refresh])
 
   const addMetric = async (date: string, weightKg: number, photo?: File | null) => {
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
+    const userId = authSession?.user.id
+    if (!userId) return
     const { data } = await supabase
       .from('body_metrics')
-      .insert({ date, weight_kg: weightKg, user_id: userData.user.id })
+      .insert({ date, weight_kg: weightKg, user_id: userId })
       .select()
       .single()
     const metric = data as BodyMetric | null
     if (metric && photo) {
-      const path = `${userData.user.id}/body/${metric.id}`
+      const path = `${userId}/body/${metric.id}`
       const { error: uploadError } = await supabase.storage
         .from('exercise-photos')
         .upload(path, photo, { upsert: true, contentType: photo.type })
@@ -361,7 +443,7 @@ export function useBodyMetrics() {
 export function useWeekStats() {
   const [volume, setVolume] = useState(0)
   const [sessionCount, setSessionCount] = useState(0)
-  const [sportMinutes, setSportMinutes] = useState(0)
+  const [sportSeconds, setSportSeconds] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -376,7 +458,7 @@ export function useWeekStats() {
       try {
         const [setsRes, activitiesRes] = await Promise.all([
           supabase.from('sets').select('session_id, weight_kg, reps').gte('created_at', since),
-          supabase.from('activities').select('duration_minutes').gte('started_at', since),
+          supabase.from('activities').select('duration_seconds').gte('started_at', since),
         ])
         if (setsRes.data) {
           const rows = setsRes.data as { session_id: string; weight_kg: number; reps: number }[]
@@ -384,8 +466,8 @@ export function useWeekStats() {
           setSessionCount(new Set(rows.map((s) => s.session_id)).size)
         }
         if (activitiesRes.data) {
-          const rows = activitiesRes.data as { duration_minutes: number }[]
-          setSportMinutes(rows.reduce((sum, a) => sum + a.duration_minutes, 0))
+          const rows = activitiesRes.data as { duration_seconds: number }[]
+          setSportSeconds(rows.reduce((sum, a) => sum + a.duration_seconds, 0))
         }
       } catch {
         // réseau indisponible
@@ -396,5 +478,5 @@ export function useWeekStats() {
     run()
   }, [])
 
-  return { volume, sessionCount, sportMinutes, loading }
+  return { volume, sessionCount, sportSeconds, loading }
 }

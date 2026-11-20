@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from './useAuth'
 import type { ExerciseGymNote } from '../lib/types'
 
 const BUCKET = 'exercise-photos'
 
 export function useExerciseGymNote(exerciseId: string | null, gymId: string | null) {
+  const { session: authSession } = useAuth()
   const [note, setNote] = useState<ExerciseGymNote | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -41,11 +43,11 @@ export function useExerciseGymNote(exerciseId: string | null, gymId: string | nu
 
   const saveText = async (fields: { technique_notes: string | null; video_url: string | null }) => {
     if (!exerciseId || !gymId) return
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
+    const userId = authSession?.user.id
+    if (!userId) return
     await supabase.from('exercise_gym_notes').upsert(
       {
-        user_id: userData.user.id,
+        user_id: userId,
         exercise_id: exerciseId,
         gym_id: gymId,
         updated_at: new Date().toISOString(),
@@ -58,18 +60,18 @@ export function useExerciseGymNote(exerciseId: string | null, gymId: string | nu
 
   const uploadPhoto = async (file: File) => {
     if (!exerciseId || !gymId) return
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
+    const userId = authSession?.user.id
+    if (!userId) return
     setUploading(true)
     try {
-      const path = `${userData.user.id}/${exerciseId}_${gymId}`
+      const path = `${userId}/${exerciseId}_${gymId}`
       const { error: uploadError } = await supabase.storage
         .from(BUCKET)
         .upload(path, file, { upsert: true, contentType: file.type })
       if (uploadError) return
       await supabase.from('exercise_gym_notes').upsert(
         {
-          user_id: userData.user.id,
+          user_id: userId,
           exercise_id: exerciseId,
           gym_id: gymId,
           photo_path: path,

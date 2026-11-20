@@ -11,6 +11,7 @@ type Props = {
   exercise: Exercise
   gymId: string | null
   sets: SetRow[]
+  pendingIds: Set<string>
   sessionRestElapsed: number | null
   onAddSet: (params: { exerciseId: string; weightKg: number; reps: number; restSeconds: number | null }) => Promise<void>
   onRemoveSet: (id: string) => Promise<void>
@@ -21,6 +22,7 @@ export default function ExerciseBlock({
   exercise,
   gymId,
   sets,
+  pendingIds,
   sessionRestElapsed,
   onAddSet,
   onRemoveSet,
@@ -124,6 +126,11 @@ export default function ExerciseBlock({
                 Série {i + 1} — <b>{s.weight_kg} kg</b> × {s.reps}
                 {s.rest_seconds !== null && (
                   <span className="text-slate-500"> · repos {formatSeconds(s.rest_seconds)}</span>
+                )}
+                {pendingIds.has(s.id) && (
+                  <span className="ml-1 text-amber-400" title="Pas encore synchronisé (hors-ligne)">
+                    ⏳
+                  </span>
                 )}
               </span>
               <button

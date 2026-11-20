@@ -40,9 +40,16 @@ export type Activity = {
   user_id: string
   sport: string
   started_at: string
-  duration_minutes: number
+  duration_seconds: number
   distance_km: number | null
   notes: string | null
+}
+
+export type ExerciseGymLink = {
+  exercise_id: string
+  gym_id: string
+  user_id: string
+  created_at: string
 }
 
 export type SessionTemplate = {
