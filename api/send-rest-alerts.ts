@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import webpush from 'web-push'
+import { setVapidDetails, sendNotification } from 'web-push'
 
 type PushSubscriptionRow = { id: string; endpoint: string; p256dh: string; auth: string }
 type RestAlertRow = {
@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  webpush.setVapidDetails(
+  setVapidDetails(
     process.env.VAPID_SUBJECT!,
     process.env.VITE_VAPID_PUBLIC_KEY!,
     process.env.VAPID_PRIVATE_KEY!,
@@ -56,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sendToAll = async (payload: string) => {
       for (const sub of (subs ?? []) as PushSubscriptionRow[]) {
         try {
-          await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
+          await sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, payload)
           sent++
         } catch (err) {
           const statusCode = (err as { statusCode?: number }).statusCode
