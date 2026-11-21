@@ -1,9 +1,18 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute } from 'workbox-precaching'
+import { clientsClaim } from 'workbox-core'
 
 declare const self: ServiceWorkerGlobalScope
 
 precacheAndRoute(self.__WB_MANIFEST)
+
+// injectManifest ne l'ajoute pas automatiquement (contrairement à generateSW) : sans ça, le nouveau
+// SW reste bloqué en "waiting" tant que l'onglet/PWA n'est jamais complètement fermé, et le téléphone
+// continue de servir l'ancien bundle — donc la bannière de notifications n'apparaît jamais.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
+})
+clientsClaim()
 
 self.addEventListener('push', (event) => {
   if (!event.data) return
