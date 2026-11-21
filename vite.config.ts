@@ -10,6 +10,12 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        swSrc: 'src/sw.ts',
+      },
       includeAssets: ['icons/icon.svg'],
       manifest: {
         name: 'Muscu Tracker',

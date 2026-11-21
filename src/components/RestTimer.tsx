@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { formatSeconds } from '../lib/time'
 import { beepBurst, playAlert } from '../lib/audio'
 import { useWakeLock } from '../hooks/useWakeLock'
 
 type Props = {
   elapsed: number
+  target: number
+  onTargetChange: (target: number) => void
 }
 
 const STEP = 15
-const DEFAULT_TARGET = 90
 const WARNING_LEAD = 10
 
-export default function RestTimer({ elapsed }: Props) {
-  const [target, setTarget] = useState(DEFAULT_TARGET)
+export default function RestTimer({ elapsed, target, onTargetChange }: Props) {
   const warned = useRef(false)
   const alerted = useRef(false)
   const prevElapsed = useRef(elapsed)
@@ -65,7 +65,7 @@ export default function RestTimer({ elapsed }: Props) {
         <span>cible</span>
         <button
           type="button"
-          onClick={() => setTarget((t) => Math.max(STEP, t - STEP))}
+          onClick={() => onTargetChange(Math.max(STEP, target - STEP))}
           className="h-6 w-6 rounded-full bg-slate-800 text-slate-300"
         >
           −
@@ -73,7 +73,7 @@ export default function RestTimer({ elapsed }: Props) {
         <span className="w-10 text-center tabular-nums">{formatSeconds(target)}</span>
         <button
           type="button"
-          onClick={() => setTarget((t) => t + STEP)}
+          onClick={() => onTargetChange(target + STEP)}
           className="h-6 w-6 rounded-full bg-slate-800 text-slate-300"
         >
           +

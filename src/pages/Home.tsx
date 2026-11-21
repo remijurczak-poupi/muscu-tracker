@@ -1,14 +1,19 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useActiveSession } from '../hooks/useActiveSession'
 import { useSessionSets } from '../hooks/useSessionSets'
 import { useExercises, useGyms, useActivities, useTemplates, useExerciseGymLinks } from '../hooks/useData'
 import { useElapsed } from '../hooks/useElapsed'
 import { useOutboxStatus } from '../hooks/useOutboxStatus'
+import { useRestAlerts } from '../hooks/useRestAlerts'
+import { usePushSubscription } from '../hooks/usePushSubscription'
 import ExerciseBlock from '../components/ExerciseBlock'
 import AddExercisePicker from '../components/AddExercisePicker'
 import RestTimer from '../components/RestTimer'
 import { formatDuration, formatDateTime } from '../lib/time'
 import { SPORTS, sportIcon, sportLabel } from '../lib/sports'
+
+const REST_TARGET_KEY = 'muscu-tracker-rest-target'
+const DEFAULT_REST_TARGET = 90
 
 function tabClass(active: boolean): string {
   return `flex-1 rounded-lg px-3 py-2.5 text-sm font-semibold ${
@@ -40,6 +45,24 @@ export default function Home() {
   }, [sets])
   const restElapsed = useElapsed(lastSetAt)
   const totalElapsed = useElapsed(session ? new Date(session.started_at).getTime() : null)
+
+  const [restTarget, setRestTarget] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem(REST_TARGET_KEY))
+      return stored > 0 ? stored : DEFAULT_REST_TARGET
+    } catch {
+      return DEFAULT_REST_TARGET
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(REST_TARGET_KEY, String(restTarget))
+    } catch {
+      // stockage indisponible, tant pis
+    }
+  }, [restTarget])
+  useRestAlerts(session?.id ?? null, lastSetAt, restTarget)
+  const push = usePushSubscription()
 
   const gym = gyms.find((g) => g.id === session?.gym_id)
   const outbox = useOutboxStatus()
@@ -136,6 +159,15 @@ export default function Home() {
                 {outbox.count > 0 ? ` — ${outbox.count} en attente` : ' — tout est enregistré localement'}
               </p>
             )}
+            {push.state === 'default' && (
+              <button
+                type="button"
+                onClick={() => void push.subscribe()}
+                className="mb-2 w-full rounded-md bg-indigo-500/10 px-2 py-1.5 text-xs text-indigo-300"
+              >
+                🔔 Activer les notifications pour le chrono de repos
+              </button>
+            )}
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <h1 className="text-lg font-bold text-white">Séance en cours</h1>
@@ -180,7 +212,9 @@ export default function Home() {
               </div>
             </div>
 
-            {lastSetAt !== null && <RestTimer elapsed={restElapsed} />}
+            {lastSetAt !== null && (
+              <RestTimer elapsed={restElapsed} target={restTarget} onTargetChange={setRestTarget} />
+            )}
           </div>
 
           <div className="flex flex-col gap-4">

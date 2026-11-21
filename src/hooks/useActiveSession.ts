@@ -9,6 +9,7 @@ import {
   cancelPendingInsert,
   onOutboxChange,
 } from '../lib/offline'
+import { cancelRestAlerts } from './useRestAlerts'
 import type { WorkoutSession } from '../lib/types'
 
 export function useActiveSession() {
@@ -70,6 +71,7 @@ export function useActiveSession() {
 
   const endSession = async () => {
     if (!session) return
+    void cancelRestAlerts(session.id)
     if (isPending('workout_sessions', session.id)) {
       updatePendingInsert('workout_sessions', session.id, { ended_at: new Date().toISOString() })
       setSession(null)
@@ -84,6 +86,7 @@ export function useActiveSession() {
 
   const cancelSession = async () => {
     if (!session) return
+    void cancelRestAlerts(session.id)
     if (isPending('workout_sessions', session.id)) {
       cancelPendingInsert('workout_sessions', session.id)
       setSession(null)
